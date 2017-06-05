@@ -163,7 +163,7 @@ function qExistsCallback(pasuk, perek, book, snap, res, exist, speech,id) {
                         {
                             title: snap.title,
                             replies: [
-                                snap.q1, snap.q2, snap.q3//«¿§»Ð
+                                snap.q1, snap.q2, snap.q3
                             ],
                             "type": 2
                         },
@@ -436,7 +436,6 @@ var gifs = ["https://media.giphy.com/media/TdfyKrN7HGTIY/giphy.gif",
 
 app.use(bodyParser.json());
 app.post('/hook', function (req, res) {
-    //return res.json(res_json());
     var b = "הביאור ל";
     var p = " פסוק ";
     var p2 = " פרק ";
@@ -458,23 +457,15 @@ app.post('/hook', function (req, res) {
                     }
                     var book1 = requestBody.result.parameters.book;
                     if ((book1 != "שמות") && (book1 != "במדבר") && (book1 != "דברים")) { //&& (book1 != "במדבר")&&(book1 != "בראשית")
+                        let messages = [];
+                        let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
+                        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
                         return res.json({
 
                             speech: speech + "",
                             displayText: speech + "",
                             source: 'apiai-webhook-sample',
-                            messages: [
-               
-                                {
-                                    title: "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך. ",
-                                    replies: [
-                                        "דברים", "שמות", "במדבר"
-                                    ],
-                                    "type": 2
-                                },
-
-
-                            ]
+                            messages: messages
                         });
 
 
@@ -486,25 +477,18 @@ app.post('/hook', function (req, res) {
                         var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + num);
                         ref.on("value", function (snapshot) {
                             speech = snapshot.val();
-                            if (speech == undefined)
+                            if (speech == undefined) {
+                                let messages = [];
+                                let title = "מגניב! סיימנו את פרק " + requestBody.result.parameters.number +", לאן ממשיכים עכשיו?";
+                                messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
                                 return res.json({
 
-                                speech: speech + "",
-                                displayText: speech + "",
-                                source: 'apiai-webhook-sample',
-                                messages: [
-
-                                    {
-                                        title: "מגניב! סיימנו את פרק " + requestBody.result.parameters.number +", לאן ממשיכים עכשיו?" ,
-                                        replies: [
-                                            "דברים", "שמות", "במדבר"
-                                        ],
-                                        "type": 2
-                                    },
-
-
-                                ]
-                            });
+                                    speech: speech + "",
+                                    displayText: speech + "",
+                                    source: 'apiai-webhook-sample',
+                                    messages: messages
+                                });
+                            }
                             else{
                                 return addQuestion(res, num, requestBody.result.parameters.number, requestBody.result.parameters.book, speech, requestBody.originalRequest.data.sender.id);
                             }}, function (errorObject) {
@@ -592,25 +576,14 @@ app.post('/hook', function (req, res) {
                     db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
                         //var exists = (snapshot.val() !== null);
                         var exists = snapshot.val();
-
+                        let messages = [];
+                        messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]))
                         return res.json({
 
                             speech: speech + "++",
                             displayText: speech + "--",
                             source: 'apiai-webhook-sample',
-                            messages: [
-
-                                {
-                                    title: requestBody.result.fulfillment.speech,
-                                    replies: [
-                                        // next,
-                                        exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)
-                                    ],
-                                    "type": 2
-                                },
-
-
-                            ]
+                            messages: messages
                         });
 
                     });
@@ -623,25 +596,15 @@ app.post('/hook', function (req, res) {
 
                         var exists = snapshot.val();
                         var a = requestBody.result.fulfillment.speech;
+                        let messages = [];
+                        messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                        messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
                         return res.json({
 
                             speech: speech + "++",
                             displayText: speech + "--",
                             source: 'apiai-webhook-sample',
-                            messages: [
-                                {
-                                    "imageUrl": gifs[math.floor(math.random() * (20))],
-                                    "type": 3
-                                },
-                                {
-                                    title: a,
-                                    replies: [
-                                        // next,
-                                        exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)
-                                    ],
-                                    "type": 2
-                                },
-                            ]
+                            messages: messages
                         });
                     });
                 } else if (requestBody.result.action == "ques") {
@@ -651,22 +614,14 @@ app.post('/hook', function (req, res) {
                             //var exists = (snapshot.val() !== null);
                             var exists = snapshot.val();
                             var a = requestBody.result.fulfillment.speech;
+                            let messages = [];
+                            messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + exists.ans + ".", [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
                             return res.json({
 
                                 speech: speech + "++",
                                 displayText: speech + "--",
                                 source: 'apiai-webhook-sample',
-                                messages: [
-
-                                    {
-                                        title: a + " התשובה הנכונה: " + exists.ans + ".",
-                                        replies: [
-                                            //  next,
-                                            exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)
-                                        ],
-                                        "type": 2
-                                    },
-                                ]
+                                messages: messages
                             });
                         });
                     } else {
@@ -675,44 +630,27 @@ app.post('/hook', function (req, res) {
                             //var exists = (snapshot.val() !== null);
                             var exists = snapshot.val();
                             if (exists.ans == requestBody.result.parameters.rightQ) {
+                                let messages = [];
+                                messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
                                 return res.json({
 
                                     speech: speech + "++",
                                     displayText: speech + "--",
                                     source: 'apiai-webhook-sample',
-                                    messages: [
-                                        {
-                                            "imageUrl": gifs[math.floor(math.random() * (20))],
-                                            "type": 3
-                                        },
-                                        {
-                                            title: requestBody.result.fulfillment.speech,
-                                            replies: [
-                                                // next,
-                                                exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)
-                                            ],
-                                            "type": 2
-                                        },
-                                    ]
+                                    messages: messages
                                 }); 
                             }
                             else{
-                                var a = "אויי התשובה הנכונה היא: ";
+                                let speech_correct_answer = "אויי התשובה הנכונה היא:";
+                                let messages = [];
+                                messages.push(buildMessageQuickReplies(speech_correct_answer + " " + exists.ans + "."))
                                 return res.json({
 
                                     speech: speech + "++",
                                     displayText: speech + "--",
                                     source: 'apiai-webhook-sample',
-                                    messages: [
-                                        {
-                                            title: a  + exists.ans + ".",
-                                            replies: [
-                                                //  next,
-                                                exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)
-                                            ],
-                                            "type": 2
-                                        }
-                                    ]
+                                    messages: messages
                                 });
                             }
                         });
@@ -751,112 +689,57 @@ app.post('/hook', function (req, res) {
                             }
 
                             else*/
-
+                            let messages = [];
+                            messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                            messages.push(buildMessageQuickReplies("כל הכבוד! איזה מגניב", [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
                             return res.json({
 
                                 speech: speech + "++",
                                 displayText: speech + "--",
                                 source: 'apiai-webhook-sample',
-                                messages: [
-                                    {
-                                        "imageUrl": gifs[math.floor(math.random() * (46))],
-                                        "type": 3
-                                    },
-                                    {
-                                        title: "כל הכבוד! איזה מגניב",
-                                        replies: [
-                                            //  next,
-                                            requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)
-                                        ],
-                                        "type": 2
-                                    },
-
-
-                                ]
+                                messages: messages
                             });
                         }
                         else//without sikum of last pskuim
+                            var messages = [];
+                            messages.push(buildMessageQuickReplies("אוי.. התשובה הנכונה היא: " + requestBody.result.contexts[0].parameters.ans + ".", [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
                             return res.json({
 
                                 speech: speech + "++",
                                 displayText: speech + "--",
                                 source: 'apiai-webhook-sample',
-                                messages: [
-
-                                    {
-                                        title: "אוי.. התשובה הנכונה היא: " + requestBody.result.contexts[0].parameters.ans + ".",
-                                        replies: [
-                                            //  next,
-                                            requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)
-                                        ],
-                                        "type": 2
-                                    },
-
-
-                                ]
+                                messages: messages
                             });
                 }
                         else
 
                     if (requestBody.result.contexts[0].parameters.ans == requestBody.result.resolvedQuery)
                     {//with sikum of last pskuim
+                        let messages = [];
+                        messages.push(buildMessage("כל הכבוד! איזה מגניב"));
+                        messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
+                        messages.push(buildMessageQuickReplies("אז מה היה לנו עד כה: " + requestBody.result.contexts[0].parameters.koteret, [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
                         return res.json({
 
                             speech: speech + "++",
                             displayText: speech + "--",
                             source: 'apiai-webhook-sample',
-                            messages: [
-                                {
-                                    speech: "כל הכבוד! איזה מגניב",
-
-                                    "type": 0
-                                },
-                                {
-                                    "imageUrl": "https://preview.ibb.co/g66kSa/image.jpg",
-                                    "type": 3
-                                },
-                                {
-                                    title: "אז מה היה לנו עד כה: " + requestBody.result.contexts[0].parameters.koteret,
-                                    replies: [
-                                        //  next,
-                                        requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)
-                                    ],
-                                    "type": 2
-                                },
-
-
-                            ]
+                            messages: messages
                         });}
                     else //witho sikum of last pskuim
+                        var speech_correct_answer = "אויי התשובה הנכונה היא:";
+                        var summery = "אז מה היה לנו עד כה:";
+                        var messages = [];
+                        messages.push(buildMessage(speech_correct_answer + " " + requestBody.result.contexts[0].parameters.ans + "."));
+                        messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
+                        messages.push(buildMessageQuickReplies(summery + " " + requestBody.result.contexts[0].parameters.koteret), [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]);
                         return res.json({
 
                             speech: speech + "++",
                             displayText: speech + "--",
                             source: 'apiai-webhook-sample',
-                            messages: [
-                                {
-                                    type: 0,
-                                    speech: "אוי.. התשובה הנכונה היא: " + requestBody.result.contexts[0].parameters.ans + "."
-                                },
-                                {
-                                    "imageUrl": "https://preview.ibb.co/g66kSa/image.jpg",
-                                    "type": 3
-                                },
-                                {
-                                    title: "אז מה היה לנו עד כה: " + requestBody.result.contexts[0].parameters.koteret,
-                                    replies: [
-                                        //  next,
-                                        requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)
-                                    ],
-                                    "type": 2
-                                },
-
-
-                            ]
+                            messages: messages
                         });
-
-
-
                 }
                 else if (requestBody.result.action == "incorrect") {
                 //    var next = "מושגים";
@@ -866,24 +749,14 @@ app.post('/hook', function (req, res) {
                             db.ref('/qa/' + exists.book + "/" + exists.perek + "/" + exists.pasuk).child("ans").once('value', function (snapshot) {
                                 var val = snapshot.val();
                                 var a = requestBody.result.fulfillment.speech;
+                                let messages = [];
+                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech + " התשובה הנכונה: " + val+"."), [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]);
                         return res.json({
 
                             speech: speech + "++",
                             displayText: speech + "--",
                             source: 'apiai-webhook-sample',
-                            messages: [
-
-                                {
-                                    title: a+ " התשובה הנכונה: " + val+".",
-                                    replies: [
-                                      //  next,
-                                        exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)
-                                    ],
-                                    "type": 2
-                                },
-
-
-                            ]
+                            messages: messages
                         });
                     });
                     });
@@ -908,7 +781,7 @@ app.post('/hook', function (req, res) {
         }
         }
 
-        console.log('result: ', speech);
+        //console.log('result: ', speech);
 
 
     } catch (err) {
@@ -961,4 +834,30 @@ function res_json() {
         ]
     };
     return res_json;
+}
+
+function buildMessage(speech) {
+    let message = {};
+    message.speech = speech;
+    message.type = 0;
+    return message;
+}
+
+function buildMessageQuickReplies(title, repliesArray) {
+    if (typeof repliesArray !== 'undefined' && repliesArray.length > 0) {
+        let message = {};
+        message.title = title;
+        message.replies = repliesArray;
+        message.type = 2;
+        return message;
+    } else {
+        return buildMessage(title);
+    }
+}
+
+function buildMessageImage(imageUrl) {
+    let message = {};
+    message.imageUrl = imageUrl;
+    message.type = 3;
+    return message;
 }
