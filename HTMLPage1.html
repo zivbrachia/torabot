@@ -1,0 +1,64 @@
+﻿<html>
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="Script2.js"></script>
+</head>
+<body>
+
+    <p id="first">: </p>
+    <script>
+        function saveText(text, filename) {
+            var a = document.createElement('a');
+            a.setAttribute('href', 'data:text/plain;charset=utf-u,' + encodeURIComponent(text));
+            a.setAttribute('download', filename);
+           // a.click();
+        }
+       
+
+        fun = function (myMap) {
+            var i = 0;
+            var ss="[ {";
+            myMap.forEach(function (value, key) {
+                if (i != 0) ss =ss +",";
+                i++;
+                $("#first").append((key + " = " + value));
+                $("#first").append("<br>");
+                ss =ss + " '"+key+"' : {" + " 'Description' :" +"'"+value+"'}";
+            });
+            ss = ss + "} ]"
+            saveText(ss, "filename.json");
+           
+            /*
+           
+            var str="";
+            
+            $("p").find('span:first').remove();
+                    $("p").children().each(function () {
+                str += $(this).text();
+                str += " ";
+            })
+            $("p").text(str); 
+        //    $('span').not('.TooltipPhrase').remove();
+
+            //$("p").each(function () {})
+    */
+        };
+ 
+      //  for (var s in msg.sections.size)  
+
+        WikiquoteApi.bibleTitles(document.title,
+                fun,
+                function (msg) {
+                    alert(msg);
+                }
+        );
+
+
+
+    </script>
+
+
+
+</body>
+</html>
+                   

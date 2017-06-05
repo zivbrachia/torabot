@@ -1,0 +1,225 @@
+﻿<html>
+<head>
+	<title>API Example</title>
+	
+	<link rel="shortcut icon" href="">
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	 <script src="js/jquery.js"></script>
+
+	<script src="https://www.gstatic.com/firebasejs/3.6.7/firebase.js"></script>
+    <script>
+	 // Initialize Firebase
+  var config = {
+    apiKey: "AIzaSyBnqQt7PZBn5-WZudyIgACfcZ-yJIMnGwQ",
+    authDomain: "torabot-2a48c.firebaseapp.com",
+    databaseURL: "https://torabot-2a48c.firebaseio.com",
+    storageBucket: "torabot-2a48c.appspot.com",
+    messagingSenderId: "290012586950"
+  };
+  firebase.initializeApp(config);
+  var database = firebase.database();
+
+  
+
+  function getPasuk (str,p){ 
+  var postsRef = database.ref('Books/'+str).child(p).once('value', function (snapshot)
+  {
+  var x=snapshot.val();  
+        setResponse(JSON.stringify(x));       
+                     
+                     
+
+  });
+  };
+
+
+
+		var accessToken = "711c08d8f0bd400caa86312c68bc4b25";
+		var baseUrl = "https://api.api.ai/v1/";
+		$(document).ready(function() {
+			$("#input").keypress(function(event) {
+				if (event.which == 13) {
+					event.preventDefault();
+					send();
+				}
+			});
+			$("#rec").click(function(event) {
+				switchRecognition();
+			});
+		});
+		var recognition;
+		function startRecognition() {
+			recognition = new webkitSpeechRecognition();
+			recognition.onstart = function(event) {
+				updateRec();
+			};
+			recognition.onresult = function(event) {
+				var text = "";
+			    for (var i = event.resultIndex; i < event.results.length; ++i) {
+			    	text += event.results[i][0].transcript;
+			    }
+			    setInput(text);
+				stopRecognition();
+			};
+			recognition.onend = function() {
+				stopRecognition();
+			};
+			recognition.lang = "en-US";
+			recognition.start();
+		}
+	
+		function stopRecognition() {
+			if (recognition) {
+				recognition.stop();
+				recognition = null;
+			}
+			updateRec();
+		}
+		function switchRecognition() {
+			if (recognition) {
+				stopRecognition();
+			} else {
+				startRecognition();
+			}
+		}
+		function setInput(text) {
+			$("#input").val(text);
+			send();
+		}
+		function updateRec() {
+			$("#rec").text(recognition ? "Stop" : "Speak");
+		}
+		function send() {
+			var text = $("#input").val();
+			$.ajax({
+				type: "POST",
+				url: baseUrl + "query?v=20150910",
+				contentType: "application/json; charset=utf-8",
+				dataType: "json",
+				headers: {
+					"Authorization": "Bearer " + accessToken
+				},
+				data: JSON.stringify({ query: text, lang: "en", sessionId: "somerandomthing" }),
+				success: function(data) {
+
+
+
+
+				if (data.result.action=="biur")
+				{
+				var x=getPasuk(data.result.parameters.book+" "+data.result.parameters.number,data.result.parameters.number1);
+				//setResponse( x);
+				}
+
+				else {
+				JSON.parse(JSON.stringify(data.result.fulfillment.messages), (key, value) => {
+				//console.log(key);  log the current property name, the last is "".
+				if ((key=="title")||(key=="speech"))
+				setResponse(value);
+				});
+
+				}
+
+
+					//setResponse(JSON.stringify(data.result.fulfillment.messages));
+				<!-- 1111111111111111111111111111111111111111111	JSON.stringify(data, undefined, 2));   -->
+				},
+				
+				error: function() {
+					setResponse("Internal Server Error");
+				}
+			});
+		//	setResponse("רק רגע בבקשה...");
+		}
+		function setResponse(val) {
+		var x =$("#response").val();
+		$("#response").text(x +"\n"+ val);
+		}
+	</script>
+	<style type="text/css">
+		body { width: 500px; margin: 0 auto; text-align: center; margin-top: 20px; }
+		div {  position: absolute; }
+		input { width: 40%; position: absolute; text-align: right; }
+		#inp {
+		position: absolute;
+		 z-index:600;
+		margin 10px;
+		bottom:   0;
+		 width: 100%; }
+		button { width: 50px; }
+		textarea { width: 100%; }
+		.overlay{
+		background-size: 100%;
+    opacity:1;
+    background:url("Sinai_desert.png") no-repeat center center fixed;
+    -webkit-background-size: cover; /* For WebKit*/
+    -moz-background-size: cover;    /* Mozilla*/
+    -o-background-size: cover;      /* Opera*/
+    background-size: cover;         /* Generic*/;
+    position:fixed;
+    width:100%;
+    height:100%;
+    top:0px;
+    left:0px;
+    z-index:1000;
+}
+.rcorners3 {
+opacity:0.6;
+    border-radius: 25px;
+	background-color:white;
+	 width: 90%; 
+   color: black;
+    padding: 20px; 
+  font-color: black;
+    height: 90%; 
+	 z-index:650;
+
+}
+#container {
+ border-radius: 25px;
+    width:60%; /*can be in percentage also.*/
+    height: 100%;
+
+    margin: 0 auto;
+    padding: 10px;
+    position: relative;
+	 z-index:700;
+}
+#response {
+ color: black;
+	 border-style:none;
+    width:80%; /*can be in percentage also.*/
+    height: 90%;
+	text-align: right;
+   
+    padding: 10px;
+    position: relative;
+	 z-index:650;
+}
+		.chat{
+	
+	top:10%;
+    opacity:0.8;
+    background-color:white;
+    width:50%;
+ 
+	margin:0 auto;
+    z-index:800;
+}
+	</style>
+</head>
+<body>
+
+
+
+
+
+<div class="overlay">
+	<div id="container">
+		<div class="rcorners3"  style="color: black";><textarea disabled id="response" cols="40" rows="20"></textarea> <div id="inp"><button id="rec">שלח</button> <input id="input" type="text"></input> </div></div>
+	
+		
+	</div>
+</div>
+</body>
+</html>
