@@ -1,40 +1,32 @@
 ﻿<html>
 <head>
-
-
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
     <script src="wikiAPI.js"></script>
     <title><%=title%></title>
 	<link rel="shortcut icon" href="">
-
 </head>
 <body>
-<p id="sec">bbb</p>
+    <p id="sec">bbb</p>
     <p id="first"></p>
 	<script src="https://www.gstatic.com/firebasejs/3.6.7/firebase.js"></script>
     <script>
 	 // Initialize Firebase
-  var config = {
-    apiKey: "AIzaSyBnqQt7PZBn5-WZudyIgACfcZ-yJIMnGwQ",
-    authDomain: "torabot-2a48c.firebaseapp.com",
-    databaseURL: "https://torabot-2a48c.firebaseio.com",
-    storageBucket: "torabot-2a48c.appspot.com",
-    messagingSenderId: "290012586950"
-  };
-  firebase.initializeApp(config);
-  var database = firebase.database();
-
-  
-
-
+        var config = {
+            apiKey: "AIzaSyBnqQt7PZBn5-WZudyIgACfcZ-yJIMnGwQ",
+            authDomain: "torabot-2a48c.firebaseapp.com",
+            databaseURL: "https://torabot-2a48c.firebaseio.com",
+            storageBucket: "torabot-2a48c.appspot.com",
+            messagingSenderId: "290012586950"
+        };
+        firebase.initializeApp(config);
+        var database = firebase.database();
+        
         function saveText(text, filename) {
             var a = document.createElement('a');
             a.setAttribute('href', 'data:text/plain;charset=utf-u,' + encodeURIComponent(text));
             a.setAttribute('download', filename);
-         //   a.click();
         }
-       
-
+        
         fun = function (myMap) {
             var i = 0;
             var ss="[ {";
@@ -46,60 +38,27 @@
 
                 ss =ss + " '"+key+"' : {" + " 'Description' :" +"'"+value+"'}";
 
-
 				var postsRef = database.ref("Books/"+document.title)
 				postsRef.update({
-    [key]: value
-   
-   
-  });
-			
-				
-
-            });
+                    [key]: value
+                });
+			});
             ss = ss + "} ]"
             saveText(ss, "filename.json");
-           
-            /*
-           
-            var str="";
-            
-            $("p").find('span:first').remove();
-                    $("p").children().each(function () {
-                str += $(this).text();
-                str += " ";
-            })
-            $("p").text(str); 
-        //    $('span').not('.TooltipPhrase').remove();
-
-            //$("p").each(function () {})
-    */
         };
  
-      //  for (var s in msg.sections.size)
+        function writeUserData(userId, name, email, imageUrl) {
+            firebase.database().ref('users/' + userId).set({
+                username: name,
+                email: email,
+                profile_picture : imageUrl
+            });
+        };
 
-function writeUserData(userId, name, email, imageUrl) {
-  firebase.database().ref('users/' + userId).set({
-    username: name,
-    email: email,
-    profile_picture : imageUrl
-  });
-  };
-
-
-        WikiquoteApi.bibleTitles('ביאור: '+document.title,
-                fun,
-                function (msg) {
-                    alert(msg);
-                }
-        );
-
-
-
+        WikiquoteApi.bibleTitles('ביאור: '+ document.title, fun, function (msg) {
+            alert(msg);
+        });
     </script>
-
-
-
 </body>
 </html>
                    
