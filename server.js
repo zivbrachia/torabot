@@ -78,8 +78,8 @@ app.post('/hook', function (req, res) {
     let summery = "אז מה היה לנו עד כה:";
     let there_you_go = "כל הכבוד! איזה מגניב";
     
-    console.log('hook request');
     var requestBody = req.body;
+    console.log('hook request: ' + requestBody.result.resolvedQuery);
     try {
         var speech = 'empty speech';
 
@@ -105,8 +105,10 @@ app.post('/hook', function (req, res) {
                         speech = "קרתה תקלה, אפשר שוב? "
 
                         var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + num);
-                        ref.on("value", function (snapshot) {
-                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + nextpasuk(num)).on("value", function (snapshot_next) {
+                        //ref.on("value", function (snapshot) {
+                        ref.once("value", function (snapshot) {
+                            //db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + nextpasuk(num)).on("value", function (snapshot_next) {
+                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + nextpasuk(num)).once("value", function (snapshot_next) {
                                 let next_pasuk = snapshot_next.val();
                                 speech = snapshot.val();
                                 if (speech === null) {
@@ -178,9 +180,11 @@ app.post('/hook', function (req, res) {
                 else if (requestBody.result.action == "unseen") {
                 }
                 else if (requestBody.result.action == "next") {
-
-                    var ref = db.ref('/users/'+requestBody.originalRequest.data.sender.id);
-                    ref.on("value", function (snapshot) {
+                    var senderId =  ((requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id)) || null;
+                    if (senderId === null) return res.json({});
+                    var ref = db.ref('/users/' + senderId);
+                    //ref.on("value", function (snapshot) {
+                    ref.once("value", function (snapshot) {
                         var exists = snapshot.val();
                         var pasuk = nextpasuk(exists.pasuk);
 
@@ -191,7 +195,8 @@ app.post('/hook', function (req, res) {
 
                         var ref = db.ref("Books/" + exists.book + " " + perek + "/" + pasuk);
 
-                        ref.on("value", function (snapshot1) {
+                        //ref.on("value", function (snapshot1) {
+                        ref.once("value", function (snapshot1) {
                             // console.log(snapshot.val());
                             if (snapshot1.val() === null) {
                                 let messages = [];
@@ -272,7 +277,8 @@ app.post('/hook', function (req, res) {
                 else if (requestBody.result.action == "q") {
                     /////////////////
                     var num1 = get_pasuk_number(requestBody.result.contexts[1].parameters.number1);
-                    db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).on("value", function (snapshot_next) {
+                    //db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).on("value", function (snapshot_next) {
+                    db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).once("value", function (snapshot_next) {
                         let next_pasuk = snapshot_next.val();
                         ///////
                         let speech_next_pasuk = requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1);
