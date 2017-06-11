@@ -42,6 +42,7 @@ app.get('/', function (req, res) {
 });
 
 app.get('/chat', function (req, res) {
+    console.log('aaa');
     let html = fs.readFileSync(__dirname + '/views/chat.html', 'utf8');
     res.end(html);
 });
