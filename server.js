@@ -3,7 +3,8 @@ var express     = require('express');
 var fileUpload  = require('express-fileupload');
 //var format      = require('date-format');
 var app         = express();
-//var request     = require('request');
+var request     = require("request");
+var restify     = require('restify');
 var admin       = require("firebase-admin");
 var jsdom       = require("jsdom");
 var bodyParser  = require('body-parser');
@@ -44,6 +45,26 @@ app.get('/file', function (req, res) {
     return res.end();
 });
 
+app.get('/cet', function (req, res) {
+    var client = restify.createJsonClient({
+        url: 'http://documentservice.cet.ac.il',
+        version: '*'
+    });
+
+    client.get('/api/DocumentVersions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he', function(err, request, response, obj) {
+        let documentVersions = JSON.parse(response.body);
+        let minorVersion = documentVersions.MinorVersion;
+        let majorVersion = documentVersions.MajorVersion;
+
+        client.get('/api/DocumentRevisions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he/' + majorVersion + '/' + minorVersion, function(err, request, response, obj) {
+            let documentRevisions = JSON.parse(response.body);
+            let a = parsedocumentRevisions(documentRevisions);
+            //return res.json(documentRevisions);
+            return res.json(a);
+        });
+    });
+});
+
 ////// POST ////////
 app.post('/fileupload', function (req, res) {
     if (!req.files)
@@ -61,6 +82,26 @@ app.post('/fileupload', function (req, res) {
         read_question_excel('files_uploaded/' + sampleFile.name);
     });
 });
+
+function parsedocumentRevisions(documentRevisions) {
+    let a = {};
+    a.pasuk = {};
+    a.title = documentRevisions.title;
+    a.documentId = documentRevisions.documentId;
+    documentRevisions.documentModel.e_questionnaire.e_page.forEach(function(page) {
+        a.pasuk[page.pageTitle] = {};
+        a.pasuk[page.pageTitle].questions = [];
+        page.e_question.forEach(function(question) {
+            let questionElement = {};
+            questionElement.question = question.instructions;
+            questionElement.answers = question.e_singleChoice.e_option;
+            questionElement.koteret = question.e_questionAssistants.assistant1;
+            questionElement.summary = question.e_questionAssistants.assistant2;
+            a.pasuk[page.pageTitle].questions.push(questionElement);
+        });
+    });
+    return a;
+}
 
 function endOfPerek(perek) {
     let messages = [];
@@ -207,7 +248,8 @@ app.post('/hook', function (req, res) {
                                 });
                             }
                             speech = m + snapshot1.val();
-                            addQuestion(res, num, requestBody.result.parameters.number, requestBody.result.parameters.book, speech, requestBody.originalRequest.data.sender.id, snapshot1.val());
+                            //(res, pasuk, perek, book, speech, id, next_pasuk)
+                            addQuestion(res,pasuk, perek, book, speech, senderId, snapshot1.val());
                         });      
                     });
                 }
