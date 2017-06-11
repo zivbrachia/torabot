@@ -8,6 +8,7 @@ var restify     = require('restify');
 var admin       = require("firebase-admin");
 var jsdom       = require("jsdom");
 var bodyParser  = require('body-parser');
+var fs          =require('fs');
 //https://graph.facebook.com/v2.6/1112428932213477?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=EAAD9YvdlKUgBAMXakzgKX7G33uyhKZA2zjNIpryYCEab03ZAUgEAZCNioEBzJV0yTtGUuz2HxgQMNi32rWK8GJnZBGi0rSAHAkqZCfSjhOHmHqsQR65LVVrTEteOFcBb8QxZCqev8lCk122q3tMUzzWrBeZCHIjKc97zSDFH0Gy1gZDZD
 var math         = require('math');
 var serviceAccount = require(__dirname + '/src/views/torabot-2a48c-firebase-adminsdk-xqpcy-4cebf9d2ed');
@@ -20,12 +21,16 @@ var db = admin.database();
 
 var port =process.env.PORT || 5000;
 
+var io = require('socket.io').listen(app.listen(port));
+
 app.use(express.static('public'));
 app.engine('html', require('ejs').renderFile);
 app.set('view engine', 'ejs');
 app.set('views', __dirname + '/src/views');
 app.use(bodyParser.json());
 app.use(fileUpload());
+
+require('./socket_event')(io, restify);
 
 ////// GET ////////
 app.get('/wiki/:book/:perek', function (req, res) {
@@ -34,6 +39,11 @@ app.get('/wiki/:book/:perek', function (req, res) {
 
 app.get('/', function (req, res) {
     res.render('apiweb', { title: "Hello" });
+});
+
+app.get('/chat', function (req, res) {
+    let html = fs.readFileSync(__dirname + '/views/chat.html', 'utf8');
+    res.end(html);
 });
 
 app.get('/file', function (req, res) {
@@ -128,13 +138,10 @@ app.post('/hook', function (req, res) {
 
             if (requestBody.result) {
 
-                if ((requestBody.result.action == "biur") || (requestBody.result.action == "biur1")) {
-                    var num = "א"
-                    if (requestBody.result.action == "biur") {
-                        num = requestBody.result.parameters.number1;
-                    }
-                    var book1 = requestBody.result.parameters.book;
-                    if ((book1 != "שמות") && (book1 != "במדבר") && (book1 != "דברים")) { //&& (book1 != "במדבר")&&(book1 != "בראשית")
+                if ((requestBody.result.action == "biur") /*|| (requestBody.result.action == "biur1")*/) {
+                    var pasuk = requestBody.result.parameters.pasuk || "א";
+                    var book = requestBody.result.parameters.book;
+                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים")) { //&& (book1 != "במדבר")&&(book1 != "בראשית")
                         let messages = [];
                         let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
                         messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
@@ -145,22 +152,22 @@ app.post('/hook', function (req, res) {
                     else {
                         speech = "קרתה תקלה, אפשר שוב? "
 
-                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + num);
+                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + pasuk);
                         //ref.on("value", function (snapshot) {
                         ref.once("value", function (snapshot) {
                             //db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + nextpasuk(num)).on("value", function (snapshot_next) {
-                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + nextpasuk(num)).once("value", function (snapshot_next) {
+                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
                                 let next_pasuk = snapshot_next.val();
                                 speech = snapshot.val();
-                                if (speech === null) {
-                                    let messages = endOfPerek(requestBody.result.parameters.number);
+                                if (next_pasuk === null) {
+                                    let messages = endOfPerek(requestBody.result.parameters.pasuk);
                                     return res.json({
                                         messages: messages
                                     }); 
                                 }
                                 else {
                                     var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
-                                    addQuestion(res, num, requestBody.result.parameters.number, requestBody.result.parameters.book, speech, sender_id, next_pasuk); 
+                                    addQuestion(res, pasuk, requestBody.result.parameters.perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk); 
                                 }
                             }, function (errorObject) {
                                 console.log(errorObject);
@@ -318,19 +325,22 @@ app.post('/hook', function (req, res) {
 
                 else if (requestBody.result.action == "q") {
                     /////////////////
-                    var num1 = get_pasuk_number(requestBody.result.contexts[1].parameters.number1);
+                    //var num1 = get_pasuk_number(requestBody.result.contexts[0].parameters.number1);
+                    var qContext = requestBody.result.contexts.find(find_context_q);
+                    var pasukContext = requestBody.result.contexts.find(find_context_pasuk);
+                    pasukContext.parameters.pasuk = get_pasuk_number(pasukContext.parameters.pasuk);
                     //db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).on("value", function (snapshot_next) {
-                    db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).once("value", function (snapshot_next) {
+                    db.ref("Books/" + pasukContext.parameters.book + " " + pasukContext.parameters.perek + "/" + nextpasuk(pasukContext.parameters.pasuk)).once("value", function (snapshot_next) {
                         let next_pasuk = snapshot_next.val();
                         ///////
-                        let speech_next_pasuk = requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1);
+                        let speech_next_pasuk = pasukContext.parameters.book + p2 + pasukContext.parameters.perek + p + nextpasuk(pasukContext.parameters.pasuk);
                         if (next_pasuk === null) {
                             speech_next_pasuk = 'הפרק הסתיים';
                         }
                         //without koteret of last pskuim
-                        if ((requestBody.result.contexts[0].parameters.koteret == '')||(requestBody.result.contexts[0].parameters.koteret == ' ')) {
+                        if ((qContext.parameters.koteret == '')||(qContext.parameters.koteret == ' ')) {
                             // correct answer
-                            if (requestBody.result.contexts[0].parameters.ans == requestBody.result.resolvedQuery) {
+                            if (qContext.parameters.ans == requestBody.result.resolvedQuery) {
                                 let messages = [];
                                 messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
                                 messages.push(buildMessageQuickReplies(there_you_go, [speech_next_pasuk]));
@@ -341,28 +351,28 @@ app.post('/hook', function (req, res) {
                             // wrong answer
                             else {
                                 var messages = [];
-                                messages.push(buildMessageQuickReplies(speech_correct_answer + ' ' + requestBody.result.contexts[0].parameters.ans + ".", [speech_next_pasuk]));
+                                messages.push(buildMessageQuickReplies(speech_correct_answer + ' ' + qContext.parameters.ans + ".", [speech_next_pasuk]));
                                 return res.json({
                                     messages: messages
                                 });
                             }
                         }
                         //with sikum of last pskuim
-                        else if (requestBody.result.contexts[0].parameters.ans == requestBody.result.resolvedQuery) {
+                        else if (qContext.parameters.ans == requestBody.result.resolvedQuery) {
                             // correct answer
                             let messages = [];
                             messages.push(buildMessage(there_you_go));
                             messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
-                            messages.push(buildMessageQuickReplies(summery + " " + requestBody.result.contexts[0].parameters.koteret, [speech_next_pasuk]));
+                            messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
                             return res.json({
                                 messages: messages
                             });
                         } else {//witho sikum of last pskuim
                             // wrong answer
                             var messages = [];
-                            messages.push(buildMessage(speech_correct_answer + " " + requestBody.result.contexts[0].parameters.ans + "."));
+                            messages.push(buildMessage(speech_correct_answer + " " + qContext.parameters.ans + "."));
                             messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
-                            messages.push(buildMessageQuickReplies(summery + " " + requestBody.result.contexts[0].parameters.koteret, [speech_next_pasuk]));
+                            messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
                             return res.json({
                                 messages: messages
                             });
@@ -433,23 +443,25 @@ app.post('/hook', function (req, res) {
                     });
 
                 }
-            else {
-                var requestBody = req.body;
+                else {
+                    var requestBody = req.body;
+                    return res.json(requestBody.result.fulfillment);
+                    /*
+                    if (requestBody.result) {
+                        speech = '';
 
-                if (requestBody.result) {
-                    speech = '';
+                        if (requestBody.result.fulfillment) {
+                            speech += requestBody.result.fulfillment.speech;
+                            speech += ' ';
+                        }
 
-                    if (requestBody.result.fulfillment) {
-                        speech += requestBody.result.fulfillment.speech;
-                        speech += ' ';
+                        if (requestBody.result.action) {
+                            speech += 'action: ' + requestBody.result.action;
+                        }
                     }
-
-                    if (requestBody.result.action) {
-                        speech += 'action: ' + requestBody.result.action;
-                    }
+                    */
                 }
             }
-        }
         }
     } catch (err) {
         console.error("Can't process request", err);
@@ -463,10 +475,18 @@ app.post('/hook', function (req, res) {
     }
 });
 
-app.listen(port, function (err) {
-    console.log('listening on port ' + port);
-});
+//app.listen(port, function (err) {
+//    console.log('listening on port ' + port);
+//});
+console.log('Your application is running on http://localhost:' + port);
 
+function find_context_q(context) {
+    return (context.name === "q");
+}
+
+function find_context_pasuk(context) {
+    return (context.name === "pasuk");
+}
 /*
 setInterval(function () {
    
@@ -613,7 +633,8 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
         //callback.messages = messages_end_perek;
     }
 
-    callback.contextOut.push(buildContextOutElement('pasuk', { book: book, number: perek, number1: pasuk }, 99));
+    //callback.contextOut.push(buildContextOutElement('pasuk', { book: book, number: perek, number1: pasuk }, 99));
+    callback.contextOut.push(buildContextOutElement('pasuk', { book: book, perek: perek, pasuk: pasuk }, 1));
 
     if (snap === null) {
         if (book === undefined) {
@@ -647,7 +668,6 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
             callback.messages.push(buildMessageQuickReplies(snap.title, [snap.q1, snap.q2, snap.q3]));
         }
     }
-
     return callback;
 }
 
