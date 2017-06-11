@@ -21,7 +21,7 @@ var db = admin.database();
 
 var port =process.env.PORT || 5000;
 
-//var io = require('socket.io').listen(app.listen(port));
+var io = require('socket.io').listen(app.listen(port));
 
 app.use(express.static('public'));
 app.engine('html', require('ejs').renderFile);
@@ -30,7 +30,7 @@ app.set('views', __dirname + '/src/views');
 app.use(bodyParser.json());
 app.use(fileUpload());
 
-//require('./socket_event')(io, restify);
+require('./socket_event')(io, restify);
 
 ////// GET ////////
 app.get('/wiki/:book/:perek', function (req, res) {
