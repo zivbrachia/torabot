@@ -93,39 +93,38 @@ module.exports = function(io, restify) {
 
 		// Handle the sending of messages
 		socket.on('msg', function(data){
-            
-            var client = restify.createJsonClient({
-                url: 'https://api.api.ai',
-                version: '*'
-            });
-            //'https://api.api.ai/v1/query?v=20150910&query=' + data.msg + '&lang=en&sessionId=' + socket.id
-
-            var options = {
-                path: '/v1/query?v=20150910',
-                headers: {
-                    'Authorization': 'Bearer 711c08d8f0bd400caa86312c68bc4b25',
-                    'content-type': 'application/json; charset=utf-8'
-                }
-            }
-            var body = {
-                "query": data.msg,
-                //"timezone": "America/New_York",
-                "lang": "en",
-                "sessionId": socket.id
-            }
-                
-            client.post(options, body, function(err, req, res, obj) {
-                /*assert.ifError(err);
-                console.log('%d -> %j', res.statusCode, res.headers);
-                console.log('%j', obj);
-                */
-                io.to(socket.id).emit('receive', {msg: JSON.stringify(obj.result.fulfillment.messages), user: 'שרה', img: '../img/unnamed.jpg'});
-            });
-
+            apiaiRequest(data.msg, socket);
 			// When the server receives a message, it sends it to the other person in the room.
 			//socket.broadcast.to(socket.room).emit('receive', {msg: data.msg, user: data.user, img: data.img});
 		});
 	});
+
+	function apiaiRequest(msg, socket) {
+		var client = restify.createJsonClient({
+			url: 'https://api.api.ai',
+			version: '*'
+		});
+
+		var options = {
+			path: '/v1/query?v=20150910',
+			headers: {
+				'Authorization': 'Bearer 711c08d8f0bd400caa86312c68bc4b25',
+				'content-type': 'application/json; charset=utf-8'
+			}
+		}
+
+		var body = {
+			"query": msg,
+			//"timezone": "America/New_York",
+			"lang": "en",
+			"sessionId": socket.id
+		}
+
+		client.post(options, body, function(err, req, res, obj) {
+			//io.to(socket.id).emit('receive', {msg: JSON.stringify(obj.result.fulfillment.messages), user: 'שרה', img: '../img/unnamed.jpg'});
+			io.to(socket.id).emit('receive', {msg: obj.result.fulfillment.messages, user: 'שרה', img: '../img/unnamed.jpg'});
+		});
+	}
 }
 
 module.exports.room_list = getRoomList;

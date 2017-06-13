@@ -42,7 +42,6 @@ app.get('/', function (req, res) {
 });
 
 app.get('/chat', function (req, res) {
-    console.log('aaa');
     let html = fs.readFileSync(__dirname + '/views/chat.html', 'utf8');
     res.end(html);
 });
@@ -117,7 +116,11 @@ function parsedocumentRevisions(documentRevisions) {
 function endOfPerek(perek) {
     let messages = [];
     let title = "מגניב! סיימנו את פרק " + perek +", לאן ממשיכים עכשיו?";
-    messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
+    if (perek==="לד") {
+        messages.push(buildMessageQuickReplies(title, ["סקר"]));    
+    } else {
+        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
+    }
     return messages;
 }
 
@@ -161,7 +164,7 @@ app.post('/hook', function (req, res) {
                                 let next_pasuk = snapshot_next.val();
                                 speech = snapshot.val();
                                 if (next_pasuk === null) {
-                                    let messages = endOfPerek(requestBody.result.parameters.pasuk);
+                                    let messages = endOfPerek(requestBody.result.parameters.perek);
                                     return res.json({
                                         messages: messages
                                     }); 

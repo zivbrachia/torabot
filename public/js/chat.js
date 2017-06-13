@@ -137,10 +137,13 @@ $(function(){
 
 		showMessage('chatStarted');
 
-		if(data.msg.trim().length) {
+		/*if(data.msg.trim().length) {
 			createChatMessage(data.msg, data.user, data.img, moment());
 			scrollToBottom();
 		}
+		*/
+		createChatMessage(data.msg, data.user, data.img, moment());
+		scrollToBottom();
 	});
 
 	textarea.keypress(function(e){
@@ -186,8 +189,7 @@ $(function(){
 	},60000);
 
 	// Function that creates a new chat message
-
-	function createChatMessage(msg,user,imgg,now){
+	function createChatMessage(msg, user, imgg, now){
 
 		var who = '';
 
@@ -197,7 +199,8 @@ $(function(){
 		else {
 			who = 'you';
 		}
-
+		create_li(who,msg, user, imgg, now);
+		/*
 		var li = $(
 			'<li class=' + who + '>'+
 				'<div class="image">' +
@@ -207,15 +210,79 @@ $(function(){
 				'</div>' +
 				'<p></p>' +
 			'</li>');
-
+			<input type="text" name="fname">
 		// use the 'text' method to escape malicious user input
 		li.find('p').text(msg);
 		li.find('b').text(user);
 
 		chats.append(li);
-
+		*/
 		messageTimeSent = $(".timesent");
 		messageTimeSent.last().text(now.fromNow());
+	}
+
+	function create_li(who, msg, user, imgg, now) {
+		if (Array.isArray(msg)) {
+			msg.forEach(function(message) {
+				//if (message.platform==='facebook') {
+					if (message.type===0) {
+						if (message.speech.trim().length) {
+							var li = createElement(who, user, imgg, now, message.speech);
+							chats.append(li);
+						}
+					}
+					if (message.type===1) {
+						var li = createElement(who, user, imgg, now, message);
+						chats.append(li);
+					}
+					if (message.type===2) {
+						if (message.title.trim().length) {
+							var li = createElement(who, user, imgg, now, message.title);
+							chats.append(li);
+						}
+					}
+					if (message.type===3) {
+						var li = createElement(who, user, imgg, now, message, message.imageUrl);
+						chats.append(li);
+					}
+				//}
+				/*
+				var li = $("<li></li>").addClass(who);
+				var user_data = $("<div></div>").addClass("image").appendTo(li);
+				var image = $("<img>").attr('src', imgg).appendTo(user_data);
+				var b = $("<b></b>").appendTo(user_data);
+				b.text(user);
+				var i = $("<i></i>").addClass('timesent').attr('data-time', now).appendTo(user_data);
+				//
+				var p = $("<p></p>").appendTo(li);
+				p.text(msg);
+				//
+				chats.append(li);
+				*/
+			});
+		}
+		else {
+			var li = createElement(who, user, imgg, now, msg);
+			chats.append(li);
+		}		
+	}
+	function createElement(who, user, imgg, now, text, imageUrl) {
+		var li = $("<li></li>").addClass(who);
+		var user_data = $("<div></div>").addClass("image").appendTo(li);
+		var image = $("<img>").attr('src', imgg).appendTo(user_data);
+		var b = $("<b></b>").appendTo(user_data);
+		b.text(user);
+		var i = $("<i></i>").addClass('timesent').attr('data-time', now).appendTo(user_data);
+		//
+		var p = $("<p></p>").appendTo(li);
+		imageUrl = imageUrl || '';
+		if (imageUrl.trim().length) {
+			var image_message = $("<img>").attr('src', imageUrl).appendTo(p);
+			return li;
+		}
+		p.text(text);
+
+		return li;
 	}
 
 	function scrollToBottom(){
