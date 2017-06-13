@@ -447,6 +447,14 @@ app.post('/hook', function (req, res) {
                     });
 
                 }
+                else if (requestBody.result.action == "math") {
+                    var result = eval(requestBody.result.parameters.a + requestBody.result.parameters.operator + requestBody.result.parameters.b);
+                    let messages = [];
+                    messages.push(buildMessage(requestBody.result.parameters.a + requestBody.result.parameters.operator + requestBody.result.parameters.b + " = " + result));
+                    return res.json({
+                        messages: messages
+                    });
+                }
                 else {
                     var requestBody = req.body;
                     return res.json(requestBody.result.fulfillment);
