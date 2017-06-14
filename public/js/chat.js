@@ -160,6 +160,7 @@ $(function(){
 	chatForm.on('submit', function(e){
 
 		e.preventDefault();
+		removeElement('quickreplies');
 
 		// Create a new chat message and display it directly
 
@@ -176,6 +177,13 @@ $(function(){
 		// Empty the textarea
 		textarea.val("");
 	});
+
+	function removeElement(element) {
+		var e = document.getElementById(element);
+		if (e!==null) {
+			e.parentNode.removeChild(e);
+		}
+	}
 
 	// Update the relative time stamps on the chat messages every minute
 
@@ -237,7 +245,7 @@ $(function(){
 					}
 					if (message.type===2) {
 						if (message.title.trim().length) {
-							var li = createElement(who, user, imgg, now, message.title);
+							var li = createElement(who, user, imgg, now, message.title, '', message.replies);
 							chats.append(li);
 						}
 					}
@@ -266,7 +274,7 @@ $(function(){
 			chats.append(li);
 		}		
 	}
-	function createElement(who, user, imgg, now, text, imageUrl) {
+	function createElement(who, user, imgg, now, text, imageUrl, replies) {
 		var li = $("<li></li>").addClass(who);
 		var user_data = $("<div></div>").addClass("image").appendTo(li);
 		var image = $("<img>").attr('src', imgg).appendTo(user_data);
@@ -274,13 +282,38 @@ $(function(){
 		b.text(user);
 		var i = $("<i></i>").addClass('timesent').attr('data-time', now).appendTo(user_data);
 		//
-		var p = $("<p></p>").appendTo(li);
+		var p = $("<p></p>").addClass("msg").appendTo(li);
 		imageUrl = imageUrl || '';
 		if (imageUrl.trim().length) {
 			var image_message = $("<img>").attr('src', imageUrl).appendTo(p);
 			return li;
 		}
 		p.text(text);
+		if (Array.isArray(replies)) {
+				var div = $("<div></div>").attr("id", "quickreplies").appendTo(li);
+			replies.forEach(function(reply) {
+				var form = $("<form></form>").appendTo(div);
+				var p_reply = $("<input>").addClass("quickreplies").attr("name", "reply").attr("type", "submit").attr("value", reply).appendTo(form);	
+
+				form.on('submit', function(e) {
+					e.preventDefault();
+					//
+					removeElement('quickreplies');
+					if($(this).find("[name='reply']").val().trim().length) {
+						createChatMessage($(this).find("[name='reply']").val(), name, img, moment());
+						scrollToBottom();
+
+						// Send the message to the other person in the chat
+						socket.emit('msg', {msg: $(this).find("[name='reply']").val(), user: user, img: imgg});
+
+					}
+		// Empty the textarea
+					textarea.val("");
+					
+				});
+			});
+
+		}
 
 		return li;
 	}
