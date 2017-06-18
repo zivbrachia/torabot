@@ -8,7 +8,9 @@ var restify     = require('restify');
 var admin       = require("firebase-admin");
 var jsdom       = require("jsdom");
 var bodyParser  = require('body-parser');
-var fs          =require('fs');
+var fs          = require('fs');
+var JSONStore   = require('json-store');
+var jsonPersist = JSONStore(__dirname + '/userData.json');
 //https://graph.facebook.com/v2.6/1112428932213477?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=EAAD9YvdlKUgBAMXakzgKX7G33uyhKZA2zjNIpryYCEab03ZAUgEAZCNioEBzJV0yTtGUuz2HxgQMNi32rWK8GJnZBGi0rSAHAkqZCfSjhOHmHqsQR65LVVrTEteOFcBb8QxZCqev8lCk122q3tMUzzWrBeZCHIjKc97zSDFH0Gy1gZDZD
 var math         = require('math');
 var serviceAccount = require(__dirname + '/src/views/torabot-2a48c-firebase-adminsdk-xqpcy-4cebf9d2ed');
@@ -69,7 +71,6 @@ app.get('/cet', function (req, res) {
         client.get('/api/DocumentRevisions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he/' + majorVersion + '/' + minorVersion, function(err, request, response, obj) {
             let documentRevisions = JSON.parse(response.body);
             let a = parsedocumentRevisions(documentRevisions);
-            //return res.json(documentRevisions);
             return res.json(a);
         });
     });
@@ -103,7 +104,7 @@ function parsedocumentRevisions(documentRevisions) {
         a.pasuk[page.pageTitle].questions = [];
         page.e_question.forEach(function(question) {
             let questionElement = {};
-            questionElement.question = question.instructions;
+            questionElement.title = question.instructions;
             questionElement.answers = question.e_singleChoice.e_option;
             questionElement.koteret = question.e_questionAssistants.assistant1;
             questionElement.summary = question.e_questionAssistants.assistant2;
@@ -124,6 +125,359 @@ function endOfPerek(perek) {
     return messages;
 }
 
+function writeUserData(req, res, next) {
+    let sender_id = (req.body.originalRequest) && (req.body.originalRequest.data) && (req.body.originalRequest.data.sender) && (req.body.originalRequest.data.sender.id);
+    req.userData = jsonPersist.get(sender_id) || {};
+    next();
+}
+
+function buildMessages(req, res, next) {
+    var b = "הביאור ל";
+    var p = " פסוק ";
+    var p2 = " פרק ";
+    var h = " הוא: ";
+    let speech_correct_answer = "אויי התשובה הנכונה היא:";
+    let summery = "אז מה היה לנו עד כה:";
+    let there_you_go = "כל הכבוד! איזה מגניב";
+    
+    var requestBody = req.body;
+    console.log('hook request: ' + requestBody.result.resolvedQuery);
+    try {
+        var speech = 'empty speech';
+
+        if (req.body) {
+
+            if (requestBody.result) {
+
+                if ((requestBody.result.action == "biur")) {
+                    var pasuk = requestBody.result.parameters.pasuk || "א";
+                    var book = requestBody.result.parameters.book;
+                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים")) {
+                        let messages = [];
+                        let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
+                        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
+                        req.send_messages = {messages: messages}
+                        next();
+                    }
+                    else {
+                        speech = "קרתה תקלה, אפשר שוב? "
+                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + pasuk);
+                        ref.once("value", function (snapshot) {
+                            req.userData.book = requestBody.result.parameters.book;
+                            req.userData.perek = requestBody.result.parameters.perek;
+                            req.userData.pasuk = pasuk;
+                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
+                                let next_pasuk = snapshot_next.val();
+                                speech = snapshot.val();
+                                if (next_pasuk === null) {
+                                    let messages = endOfPerek(requestBody.result.parameters.perek);
+                                    req.send_messages = {messages: messages}
+                                    next(); 
+                                }
+                                else {
+                                    var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
+                                    addQuestion(res, pasuk, requestBody.result.parameters.perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk, req, next); 
+                                }
+                            }, function (errorObject) {
+                                console.log(errorObject);
+                            });
+                        }, function (errorObject) {
+                            console.log(errorObject);
+                        });
+                    }
+                } else if (requestBody.result.action == "bye") {
+                    return res.json({
+                        speech: speech + "++",
+                        displayText: speech + "--",
+                        data: {
+                            facebook: {
+
+                                attachment: {
+                                    type: "image",
+                                    payload: {
+                                        url: "http://www.seobook.com/images/smallfish.jpg"
+                                    }
+                                },
+
+
+                            }
+                        },
+                    });
+                } //http://sparks.simania.co.il/bibleSearch.php?query
+                else if (requestBody.result.action == "findName") {
+                    name = "נטע"
+                    request("http://sparks.simania.co.il/bibleSearch.php?query=" + name, function (error, response, body) {
+                        if (!error) {
+                            jsdom.env({
+                                html: body,
+                                scripts: [
+                                    'http://code.jquery.com/jquery-1.5.min.js'
+                                ]
+                                }, function (err, window) {
+                                    var $ = window.jQuery;
+                                    $("div > center > span > b:first").each(function () {
+                                        console.log($(this).text());
+                                    });
+                            });
+                            parseMyAwesomeHtml(body);
+                        } else {
+                            console.log(error);
+                        }
+                    });
+
+                }
+                else if (requestBody.result.action == "qa") {
+                }
+                else if (requestBody.result.action == "unseen") {
+                }
+                else if (requestBody.result.action == "next") {
+                    var senderId =  ((requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id)) || null;
+                    if (senderId === null) {
+                        req.send_messages = {};
+                        next();
+                    }
+                    var pasuk = nextpasuk(req.userData.pasuk);
+                    var m = req.userData.book + " פרק " + req.userData.perek + " פסוק " + pasuk + ": \n";
+                    var ref = db.ref("Books/" + req.userData.book + " " + req.userData.perek + "/" + pasuk);
+                    ref.once("value", function (snapshot1) {
+                        if (snapshot1.val() === null) {
+                            let messages = [];
+                            messages.push(buildMessage("הפרק הסתיים"));
+                            messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר"]));
+                            req.send_messages = {messages: messages}
+                            next();
+                        }
+                        speech = m + snapshot1.val();
+                        addQuestion(res, pasuk, req.userData.perek, req.userData.book, speech, senderId, snapshot1.val(), req, next);
+                    });
+                    /*
+                    var ref = db.ref('/users/' + senderId);
+                    //ref.on("value", function (snapshot) {
+                    ref.once("value", function (snapshot) {
+                        var exists = snapshot.val();
+                        var pasuk = nextpasuk(exists.pasuk);
+
+                        var m = exists.book + " פרק " + exists.perek + " פסוק " + pasuk + ": \n";
+
+                        var book = exists.book;
+                        var perek = exists.perek;
+
+                        var ref = db.ref("Books/" + exists.book + " " + perek + "/" + pasuk);
+
+                        //ref.on("value", function (snapshot1) {
+                        ref.once("value", function (snapshot1) {
+                            // console.log(snapshot.val());
+                            if (snapshot1.val() === null) {
+                                let messages = [];
+                                messages.push(buildMessage("הפרק הסתיים"));
+                                messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר"]));
+                                req.send_messages = {messages: messages}
+                                next();
+                            }
+                            speech = m + snapshot1.val();
+                            //(res, pasuk, perek, book, speech, id, next_pasuk)
+                            addQuestion(res, pasuk, perek, book, speech, senderId, snapshot1.val(), req, next);
+                        });      
+                    });
+                    */
+                }
+                else if (requestBody.result.action == "meaning") {
+                    db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
+                        //var exists = (snapshot.val() !== null);
+                        var exists = snapshot.val();
+                        let messages = [];
+                        messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]))
+                        req.send_messages = {messages: messages}
+                        next();
+                    });
+
+                }
+                else if (requestBody.result.action == "correct") {
+                    // var next = "מושגים";
+                    var a = requestBody.result.fulfillment.speech;
+                    let messages = [];
+                    messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                    messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
+                    req.send_messages = {messages: messages}
+                    next();
+                    /*
+                    db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
+                        //var exists = (snapshot.val() !== null);
+
+                        var exists = snapshot.val();
+                        var a = requestBody.result.fulfillment.speech;
+                        let messages = [];
+                        messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                        messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
+                        req.send_messages = {messages: messages}
+                        next();
+                    });
+                    */
+                } else if (requestBody.result.action == "ques") {
+                    if (requestBody.result.parameters.wrongQ) {
+                        var a = requestBody.result.fulfillment.speech;
+                        let messages = [];
+                        messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + req.userData.ans + ".", [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
+                        req.send_messages = {messages: messages};
+                        next();
+                        /*
+                        db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
+                            var exists = snapshot.val();
+                            var a = requestBody.result.fulfillment.speech;
+                            let messages = [];
+                            messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + exists.ans + ".", [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
+                            req.send_messages = {messages: messages};
+                            next();
+                        });
+                        */
+                    } else {
+                        var a = requestBody.result.fulfillment.speech;
+                        if (req.userData.ans == requestBody.result.parameters.rightQ) {
+                            let messages = [];
+                            messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                            messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
+                            req.send_messages = {messages: messages};
+                            next(); 
+                        } else {
+                            let messages = [];
+                            messages.push(buildMessageQuickReplies(speech_correct_answer + " " + req.userData.ans + "."))
+                            req.send_messages = {messages: messages};
+                            next();
+                        }
+                        /*
+
+                        db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
+                            //var exists = (snapshot.val() !== null);
+                            var exists = snapshot.val();
+                            if (exists.ans == requestBody.result.parameters.rightQ) {
+                                let messages = [];
+                                messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
+                                req.send_messages = {messages: messages};
+                                next(); 
+                            }
+                            else{
+                                let messages = [];
+                                messages.push(buildMessageQuickReplies(speech_correct_answer + " " + exists.ans + "."))
+                                req.send_messages = {messages: messages};
+                                next();
+                            }
+                        });
+                        */
+                    }
+                }
+
+                else if (requestBody.result.action == "q") {
+                    /////////////////
+                    //var num1 = get_pasuk_number(requestBody.result.contexts[0].parameters.number1);
+                    var qContext = requestBody.result.contexts.find(find_context_q);
+                    var pasukContext = requestBody.result.contexts.find(find_context_pasuk);
+                    pasukContext.parameters.pasuk = get_pasuk_number(pasukContext.parameters.pasuk);
+                    //db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).on("value", function (snapshot_next) {
+                    db.ref("Books/" + pasukContext.parameters.book + " " + pasukContext.parameters.perek + "/" + nextpasuk(pasukContext.parameters.pasuk)).once("value", function (snapshot_next) {
+                        let next_pasuk = snapshot_next.val();
+                        ///////
+                        let speech_next_pasuk = pasukContext.parameters.book + p2 + pasukContext.parameters.perek + p + nextpasuk(pasukContext.parameters.pasuk);
+                        if (next_pasuk === null) {
+                            speech_next_pasuk = 'הפרק הסתיים';
+                        }
+                        //without koteret of last pskuim
+                        if ((qContext.parameters.koteret == '')||(qContext.parameters.koteret == ' ')) {
+                            // correct answer
+                            if (qContext.parameters.ans == requestBody.result.resolvedQuery) {
+                                let messages = [];
+                                messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
+                                messages.push(buildMessageQuickReplies(there_you_go, [speech_next_pasuk]));
+                                req.send_messages = {messages: messages};
+                                next();
+                            }
+                            // wrong answer
+                            else {
+                                var messages = [];
+                                messages.push(buildMessageQuickReplies(speech_correct_answer + ' ' + qContext.parameters.ans + ".", [speech_next_pasuk]));
+                                req.send_messages = {messages: messages};
+                                next();
+                            }
+                        }
+                        //with sikum of last pskuim
+                        else if (qContext.parameters.ans == requestBody.result.resolvedQuery) {
+                            // correct answer
+                            let messages = [];
+                            messages.push(buildMessage(there_you_go));
+                            messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
+                            messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
+                            req.send_messages = {messages: messages};
+                            next();
+                        } else {//witho sikum of last pskuim
+                            // wrong answer
+                            var messages = [];
+                            messages.push(buildMessage(speech_correct_answer + " " + qContext.parameters.ans + "."));
+                            messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
+                            messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
+                            req.send_messages = {messages: messages};
+                            next();
+                        }
+                        ///////
+                    }, function (errorObject) {
+                        console.log(errorObject);
+                    });
+                    /////////////////
+                }
+                else if (requestBody.result.action == "incorrect") {
+                //    var next = "מושגים";
+                    db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
+                        //var exists = (snapshot.val() !== null);
+                        var exists = snapshot.val();
+                            db.ref('/qa/' + exists.book + "/" + exists.perek + "/" + exists.pasuk).child("ans").once('value', function (snapshot) {
+                                var val = snapshot.val();
+                                var a = requestBody.result.fulfillment.speech;
+                                let messages = [];
+                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech + " התשובה הנכונה: " + val+"."), [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]);
+                                req.send_messages = {messages: messages};
+                                next();
+                            });
+                    });
+
+                }
+                else if (requestBody.result.action == "math") {
+                    var result = eval(requestBody.result.parameters.a + requestBody.result.parameters.operator + requestBody.result.parameters.b);
+                    let messages = [];
+                    messages.push(buildMessage(requestBody.result.parameters.a + requestBody.result.parameters.operator + requestBody.result.parameters.b + " = " + result));
+                    req.send_messages = {messages: messages}
+                    next();
+                }
+                else {
+                    var requestBody = req.body;
+                    req.send_messages = requestBody.result.fulfillment.messages;
+                    next();
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Can't process request", err);
+
+        return res.status(400).json({
+            status: {
+                code: 400,
+                errorType: err.message
+            }
+        });
+    }
+}
+
+function saveUserData(req, res, next) {
+    let sender_id = (req.body.originalRequest) && (req.body.originalRequest.data) && (req.body.originalRequest.data.sender) && (req.body.originalRequest.data.sender.id);
+    console.log("sender_id: " + sender_id);
+    jsonPersist.set(sender_id, req.userData);
+    next();
+}
+
+function sendMessages(req, res) {
+    return res.json(req.send_messages);
+}
+
+app.post('/hook', [writeUserData, buildMessages, saveUserData, sendMessages]);
+/*
 app.post('/hook', function (req, res) {
     var b = "הביאור ל";
     var p = " פסוק ";
@@ -142,10 +496,10 @@ app.post('/hook', function (req, res) {
 
             if (requestBody.result) {
 
-                if ((requestBody.result.action == "biur") /*|| (requestBody.result.action == "biur1")*/) {
+                if ((requestBody.result.action == "biur")) {
                     var pasuk = requestBody.result.parameters.pasuk || "א";
                     var book = requestBody.result.parameters.book;
-                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים")) { //&& (book1 != "במדבר")&&(book1 != "בראשית")
+                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים")) {
                         let messages = [];
                         let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
                         messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
@@ -157,9 +511,7 @@ app.post('/hook', function (req, res) {
                         speech = "קרתה תקלה, אפשר שוב? "
 
                         var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + pasuk);
-                        //ref.on("value", function (snapshot) {
                         ref.once("value", function (snapshot) {
-                            //db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.number + "/" + nextpasuk(num)).on("value", function (snapshot_next) {
                             db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
                                 let next_pasuk = snapshot_next.val();
                                 speech = snapshot.val();
@@ -386,49 +738,6 @@ app.post('/hook', function (req, res) {
                         console.log(errorObject);
                     });
                     /////////////////
-                    /*
-                    var num1 = get_pasuk_number(requestBody.result.contexts[1].parameters.number1);
-                    //without koteret of last pskuim
-                    if ((requestBody.result.contexts[0].parameters.koteret == '')||(requestBody.result.contexts[0].parameters.koteret == ' ')) {
-                        // correct answer
-                        if (requestBody.result.contexts[0].parameters.ans == requestBody.result.resolvedQuery) {
-                            let messages = [];
-                            messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
-                            messages.push(buildMessageQuickReplies(there_you_go, [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
-                            return res.json({
-                                messages: messages
-                            });
-                        }
-                        // wrong answer
-                        else {
-                            var messages = [];
-                            messages.push(buildMessageQuickReplies(speech_correct_answer + ' ' + requestBody.result.contexts[0].parameters.ans + ".", [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
-                            return res.json({
-                                messages: messages
-                            });
-                        }
-                    }
-                    //with sikum of last pskuim
-                    else if (requestBody.result.contexts[0].parameters.ans == requestBody.result.resolvedQuery) {
-                        // correct answer
-                        let messages = [];
-                        messages.push(buildMessage(there_you_go));
-                        messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
-                        messages.push(buildMessageQuickReplies(summery + " " + requestBody.result.contexts[0].parameters.koteret, [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
-                        return res.json({
-                            messages: messages
-                        });
-                    } else {//witho sikum of last pskuim
-                        // wrong answer
-                        var messages = [];
-                        messages.push(buildMessage(speech_correct_answer + " " + requestBody.result.contexts[0].parameters.ans + "."));
-                        messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
-                        messages.push(buildMessageQuickReplies(summery + " " + requestBody.result.contexts[0].parameters.koteret, [requestBody.result.contexts[1].parameters.book + p2 + requestBody.result.contexts[1].parameters.number + p + nextpasuk(num1)]));
-                        return res.json({
-                            messages: messages
-                        });
-                    }
-                    */
                 }
                 else if (requestBody.result.action == "incorrect") {
                 //    var next = "מושגים";
@@ -458,20 +767,6 @@ app.post('/hook', function (req, res) {
                 else {
                     var requestBody = req.body;
                     return res.json(requestBody.result.fulfillment);
-                    /*
-                    if (requestBody.result) {
-                        speech = '';
-
-                        if (requestBody.result.fulfillment) {
-                            speech += requestBody.result.fulfillment.speech;
-                            speech += ' ';
-                        }
-
-                        if (requestBody.result.action) {
-                            speech += 'action: ' + requestBody.result.action;
-                        }
-                    }
-                    */
                 }
             }
         }
@@ -486,10 +781,7 @@ app.post('/hook', function (req, res) {
         });
     }
 });
-
-//app.listen(port, function (err) {
-//    console.log('listening on port ' + port);
-//});
+*/
 console.log('Your application is running on http://localhost:' + port);
 
 function find_context_q(context) {
@@ -608,16 +900,65 @@ function setUser(id, book, perek, pasuk, ans) {
     });
 };
 
-function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk) {
+function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk, req, next) {
+    //addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk);
     db.ref('qa/'+book+"/"+perek).child(pasuk).once('value', function (snapshot) {
-        let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, id, next_pasuk);
-        return res.json(jsonObj);
+        let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, id, next_pasuk, req);
+        req.send_messages = jsonObj
+        next();
+        //return res.json(jsonObj);
     });
+    
+
  };
 
- function qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk) {
+ function addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk) {
+    var client = restify.createJsonClient({
+        url: 'http://documentservice.cet.ac.il',
+        version: '*'
+    });
+
+    client.get('/api/DocumentVersions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he', function(err, request, response, obj) {
+        let documentVersions = JSON.parse(response.body);
+        let minorVersion = documentVersions.MinorVersion;
+        let majorVersion = documentVersions.MajorVersion;
+
+        client.get('/api/DocumentRevisions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he/' + majorVersion + '/' + minorVersion, function(err, request, response, obj) {
+            let documentRevisions = JSON.parse(response.body);
+            let a = parsedocumentRevisions(documentRevisions);
+            //
+            let b = "פסוק:"
+            let snap = buildSnapFromCet(a.pasuk[b + pasuk].questions[0]);
+            //
+            let jsonObj = qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk);
+            return res.json(jsonObj);
+        });
+    });
+ }
+
+ function buildSnapFromCet(pasuk) {
+    let snap = {};
+    snap.title = cleanHtmlTags(pasuk.title);
+    snap.koteret = cleanHtmlTags(pasuk.koteret);
+    snap.summary = cleanHtmlTags(pasuk.summary);
+    pasuk.answers.forEach(function(answer, i) {
+        snap["q" + (i + 1)] = cleanHtmlTags(answer.labelHtml);
+        if (answer.correct === true) {
+            snap.ans = cleanHtmlTags(answer.labelHtml);
+        }
+    });
+    return snap;
+ }
+
+ function cleanHtmlTags(string) {
+     if (string===null) return string;
+     return string.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, '');
+ }
+
+ function qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk, req) {
     let jsonObj = buildCallback(pasuk, perek, book, snap, speech, next_pasuk);
-    setUser(id, book, perek, pasuk, (snap && snap.ans) || '');
+    req.userData.ans = (snap && snap.ans) || '';
+    //setUser(id, book, perek, pasuk, (snap && snap.ans) || '');
     return jsonObj;
 };
 
@@ -640,12 +981,8 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
     
     if (next_pasuk === null) {
         speech_next_pasuk = 'הפרק הסתיים';
-        //messages_end_perek.push(buildMessage(end + " " + perek));
-        //messages_end_perek.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?"), ["דברים", "שמות", "במדבר"]);
-        //callback.messages = messages_end_perek;
     }
 
-    //callback.contextOut.push(buildContextOutElement('pasuk', { book: book, number: perek, number1: pasuk }, 99));
     callback.contextOut.push(buildContextOutElement('pasuk', { book: book, perek: perek, pasuk: pasuk }, 1));
 
     if (snap === null) {

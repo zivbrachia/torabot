@@ -6,7 +6,6 @@ module.exports = function(io, restify) {
 		// number of people in this chat room
 
 		socket.on('load',function(roomId){
-
 			var room = findClientsSocket(io, roomId);
 			if(room.length === 0 ) {
 
