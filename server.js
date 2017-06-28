@@ -132,7 +132,7 @@ function endOfPerek(perek) {
     if (perek==="לד") {
         messages.push(buildMessageQuickReplies(title, ["סקר"]));    
     } else {
-        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
+        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
     }
     return messages;
 }
@@ -170,6 +170,7 @@ function buildMessages(req, res, next) {
                     var pasuk = requestBody.result.parameters.pasuk || "א";
                     var book = requestBody.result.parameters.book;
                     var perek = requestBody.result.parameters.perek || "א";
+                    console.log('book: ' + book);
                     if ((book != "שמות") && (book != "במדבר") && (book != "דברים") && (book != "יונה")) {
                         let messages = [];
                         let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
@@ -261,7 +262,7 @@ function buildMessages(req, res, next) {
                         if (snapshot1.val() === null) {
                             let messages = [];
                             messages.push(buildMessage("הפרק הסתיים"));
-                            messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר"]));
+                            messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר", "יונה"]));
                             req.send_messages = {messages: messages}
                             next();
                         }
