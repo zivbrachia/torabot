@@ -10,55 +10,6 @@ var WikiquoteApi = (function () {
      * Query includes "redirects" option to automatically traverse redirects.
      * All words will be capitalized as this generally yields more consistent results.
      */
-    function get_indexOf_pasuk(text, pasukArray, index) {
-        let pasuk_element = pasukArray[index].outerHTML;
-        let pasuk_start_char = text.indexOf(pasuk_element);
-        return pasuk_start_char
-    }
-
-    function get_tooltipPhrase(pasuk_biurArray, index) {
-        let t_t_pharse = '<span class="TooltipPhrase">';
-        let span = '</span></span>';
-        let tooltipPhrase = t_t_pharse + pasuk_biurArray[index].split(span)[0] + span;
-        return tooltipPhrase
-    }
-
-    function ziv_test(text) {
-        let myMap = new Map();
-        let parser = new DOMParser();
-        let doc = parser.parseFromString(text, "text/xml");
-        let pasukArray = doc.querySelectorAll('span[id^=".D7."]');
-        //let biurArray = doc.getElementsByClassName("TooltipPhrase");
-
-        for (var index = 1; index < pasukArray.length; index++) {
-            let pasuk_1_start_char = get_indexOf_pasuk(text, pasukArray, (index-1));
-            let pasuk_2_start_char = get_indexOf_pasuk(text, pasukArray, (index));
-            //
-            let pasuk_string_original = text.substring(pasuk_1_start_char, pasuk_2_start_char);
-            let pasuk_string_copy = pasuk_string_original;
-            //
-            let pasuk_biurArray = pasuk_string_original.split('<span class="TooltipPhrase">');
-            for (let j = 1; j < pasuk_biurArray.length; j++) {
-                let tooltipPhrase = get_tooltipPhrase(pasuk_biurArray, j);
-                //
-                let phrase = parser.parseFromString(tooltipPhrase, "text/xml");
-                let span_biur_text = phrase.getElementsByClassName("TooltipSpan")[0].outerHTML.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, '');
-                let phrase_with_biur = phrase.getElementsByClassName("TooltipPhrase")[0].innerHTML.replace(phrase.getElementsByClassName("TooltipSpan")[0].outerHTML, " [" + span_biur_text + "]")
-                pasuk_string_copy = pasuk_string_copy.replace(tooltipPhrase, phrase_with_biur);
-                //
-            }
-            //
-            pasuk_string_copy = pasuk_string_copy.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, '');
-            let first_space = pasuk_string_copy.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, '').indexOf(" ");
-            let pasuk = pasuk_string_copy.substring(0, first_space);
-            pasuk_string_copy = pasuk_string_copy.substring(first_space, pasuk_string_copy.length);
-            //console.log(pasuk);
-            //console.log(pasuk_string_copy);
-            myMap.set(pasuk, pasuk_string_copy);
-        }
-        return myMap;
-    }
-
     wqa.queryTitles = function (titles, success, error) {
         $.ajax({
             url: API_URL,
@@ -101,6 +52,10 @@ var WikiquoteApi = (function () {
      * If no 1.x sections exists, returns section 1. Returns the titles that were used
      * in case there is a redirect.
      */
+    function test_ziv(text) {
+        console.log('aaa');
+    }
+
     wqa.getSectionsForPage = function (pageId, success, error) {
         $.ajax({
             url: API_URL,
@@ -114,8 +69,29 @@ var WikiquoteApi = (function () {
 
             success: function (result, status) {
                 var text = result.parse.text["*"];
-                let map = ziv_test(text);
-       
+
+                test_ziv(result.parse.text["*"]);
+                // var $lis = $(text " .mw-content-rtl p").find('div').attr("class", "mw-content-rtl");
+         //       var $lis = $(text.children).find("p");
+
+
+
+       /*       var $lis = $(text).find('span');
+
+               $lis.each(function () {
+                
+                  // if ($(this).text().indexOf("����� ������ �� ��������") >= 0) $(this).remove();
+                   // Remove all children that aren't <small>
+                   $(this).children().remove(':not(small)');
+                   var $smalls = $(this).find('small');
+
+                   if ($smalls.length > 0) {
+                       $smalls.children().remove(':not(small)');
+                   } 
+               });
+               //$lis.find('span').eq(0).remove();
+             //  $(this).find('span:first').remove();
+             */
                 var myMap = new Map();
                 var chars = [];
                 var strings = [];
@@ -140,17 +116,44 @@ var WikiquoteApi = (function () {
                         }
                     }
 
-                )};
+)
+                };
+              //  fun($(text).find("div ~ p ,dd").contents());
 
                 $(text).find("div ~ p ,dd").contents().each(function (index, element) {
+            /*        if ($(this).is("a")) { if ($(this).text().length < 4) { if (prev != "") 
+                        myMap.set(prev,temp); prev = $(this).text();  }}
+
+                    else {
+                        if ($(this).is("a"));
+                        else if ($(this).is("small")) { temp = temp +"("+ $(this).text() + ") "; }
+                        else temp = temp + $(this).text() + " ";
+                    }
+    
+*/                     //   if ($(this).is("not a")) temp= temp + $(this).text() + " ";
                     if ($(this).is("a"));
                     else if ($(this).is("small")) { temp = temp + "[" + $(this).text() + "] "; }
                     else temp = temp + $(this).clone().children().remove().end().text(); + " ";
                     fun(this);
+              /*      $(this).children().each(function (index, element) {
+                        if ($(this).is("a")) {
+                            if ($(this).text().length < 4) {
+                                if (prev != ""){
+                                    myMap.set(prev, temp); temp = "";} prev = $(this).text();
+                            }
+                        }
+
+                        else {
+                            if ($(this).is("a"));
+                            else if ($(this).is("small")) { temp = temp + "(" + $(this).text() + ") "; }
+                            else temp = temp + $(this).text() + " ";
+                        }
+
+            
+                    })*/
                 });
 
-                //success(myMap);
-                success(map);
+                success(myMap);
 
              /*   var sectionArray = [];
                 var sections = result.parse.sections;

@@ -1,7 +1,7 @@
 ﻿<html>
 <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-    <script src="wikiAPI.js"></script>
+    <script src="/wikiAPI.js"></script>
     <title><%=title%></title>
 	<link rel="shortcut icon" href="">
 </head>
@@ -28,6 +28,9 @@
         }
         
         fun = function (myMap) {
+            let url = decodeURI(document.URL);
+            let book = url.split("/")[4];
+            let perek = url.split("/")[5];
             var i = 0;
             var ss="[ {";
             myMap.forEach(function (value, key) {
@@ -38,7 +41,8 @@
 
                 ss =ss + " '"+key+"' : {" + " 'Description' :" +"'"+value+"'}";
 
-				var postsRef = database.ref("Books/"+document.title)
+				var postsRef = database.ref("books/" + book + "/perek/" + perek)    //database.ref("Books/"+document.title)
+                
 				postsRef.update({
                     [key]: value
                 });
@@ -46,7 +50,7 @@
             ss = ss + "} ]"
             saveText(ss, "filename.json");
         };
- 
+        /*
         function writeUserData(userId, name, email, imageUrl) {
             firebase.database().ref('users/' + userId).set({
                 username: name,
@@ -54,7 +58,7 @@
                 profile_picture : imageUrl
             });
         };
-
+        */
         WikiquoteApi.bibleTitles('ביאור: '+ document.title, fun, function (msg) {
             alert(msg);
         });

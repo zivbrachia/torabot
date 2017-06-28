@@ -25,6 +25,12 @@ var port =process.env.PORT || 5000;
 
 var io = require('socket.io').listen(app.listen(port));
 
+app.use(function(req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
 app.use(express.static('public'));
 app.engine('html', require('ejs').renderFile);
 app.set('view engine', 'ejs');
@@ -36,7 +42,13 @@ require('./socket_event')(io, restify);
 
 ////// GET ////////
 app.get('/wiki/:book/:perek', function (req, res) {
-    res.render('wikiGet', { title: req.params.book + " " + req.params.perek });
+    //res.render('wikiGet', { title: req.params.book + " " + req.params.perek });
+
+    let j = require('./Books/jonah');
+    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[0]);
+    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[1]);
+    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[2]);
+    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[3]);
 });
 
 app.get('/', function (req, res) {
@@ -128,6 +140,11 @@ function endOfPerek(perek) {
 function writeUserData(req, res, next) {
     let sender_id = (req.body.originalRequest) && (req.body.originalRequest.data) && (req.body.originalRequest.data.sender) && (req.body.originalRequest.data.sender.id);
     req.userData = jsonPersist.get(sender_id) || {};
+    //
+    req.source = (req.body.originalRequest) && (req.body.originalRequest.source);
+    if (req.source === undefined) {
+         req.source = (req.body.result) && (req.body.result.source);
+    }
     next();
 }
 
@@ -152,31 +169,32 @@ function buildMessages(req, res, next) {
                 if ((requestBody.result.action == "biur")) {
                     var pasuk = requestBody.result.parameters.pasuk || "א";
                     var book = requestBody.result.parameters.book;
-                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים")) {
+                    var perek = requestBody.result.parameters.perek || "א";
+                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים") && (book != "יונה")) {
                         let messages = [];
                         let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
-                        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
+                        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
                         req.send_messages = {messages: messages}
                         next();
                     }
                     else {
                         speech = "קרתה תקלה, אפשר שוב? "
-                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + pasuk);
+                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + perek + "/" + pasuk);
                         ref.once("value", function (snapshot) {
                             req.userData.book = requestBody.result.parameters.book;
-                            req.userData.perek = requestBody.result.parameters.perek;
+                            req.userData.perek = perek;//requestBody.result.parameters.perek;
                             req.userData.pasuk = pasuk;
-                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
+                            db.ref("Books/" + requestBody.result.parameters.book + " " + perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
                                 let next_pasuk = snapshot_next.val();
                                 speech = snapshot.val();
                                 if (next_pasuk === null) {
-                                    let messages = endOfPerek(requestBody.result.parameters.perek);
+                                    let messages = endOfPerek(perek);
                                     req.send_messages = {messages: messages}
                                     next(); 
                                 }
                                 else {
                                     var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
-                                    addQuestion(res, pasuk, requestBody.result.parameters.perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk, req, next); 
+                                    addQuestion(res, pasuk, perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk, req, next); 
                                 }
                             }, function (errorObject) {
                                 console.log(errorObject);
@@ -404,7 +422,8 @@ function buildMessages(req, res, next) {
                             // correct answer
                             let messages = [];
                             messages.push(buildMessage(there_you_go));
-                            messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
+                            let summary_pic = qContext.parameters.summary_pics || "https://preview.ibb.co/g66kSa/image.jpg";
+                            messages.push(buildMessageImage(summary_pic));
                             messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
                             req.send_messages = {messages: messages};
                             next();
@@ -412,7 +431,8 @@ function buildMessages(req, res, next) {
                             // wrong answer
                             var messages = [];
                             messages.push(buildMessage(speech_correct_answer + " " + qContext.parameters.ans + "."));
-                            messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
+                            let summary_pic = qContext.parameters.summary_pics || "https://preview.ibb.co/g66kSa/image.jpg";
+                            messages.push(buildMessageImage(summary_pic));
                             messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
                             req.send_messages = {messages: messages};
                             next();
@@ -477,6 +497,38 @@ function sendMessages(req, res) {
 }
 
 app.post('/hook', [writeUserData, buildMessages, saveUserData, sendMessages]);
+
+app.post('/webhook', function (req, res) {
+    var client = restify.createJsonClient({
+        url: 'https://api.api.ai',
+        version: '*'
+    });
+
+    var options = {
+        path: '/v1/query?v=20150910',
+        headers: {
+            'Authorization': 'Bearer 711c08d8f0bd400caa86312c68bc4b25',
+            'content-type': 'application/json; charset=utf-8'
+        }
+    }
+
+    var body = {
+        "query": req.body.msg,
+        //"timezone": "America/New_York",
+        "lang": "en",
+        "sessionId": '222'
+    }
+
+    client.post(options, body, function(err, req, resApi, obj) {
+        //io.to(socket.id).emit('receive', {msg: JSON.stringify(obj.result.fulfillment.messages), user: 'שרה', img: '../img/unnamed.jpg'});
+        //io.to(socket.id).emit('receive', {msg: obj.result.fulfillment.messages, user: 'שרה', img: '../img/unnamed.jpg'});
+        return res.json({
+            msg: obj.result.fulfillment.messages, 
+            //bg: 'https://s12.postimg.org/9weuz3svx/bkg_img.jpg'
+        });
+    });
+});
+
 /*
 app.post('/hook', function (req, res) {
     var b = "הביאור ל";
@@ -822,7 +874,10 @@ function read_question_excel(file_name) {
                     ans: callback[i].realans,
                     title: callback[i].question,
                     koteret: callback[i].koteret,
-                    summary: callback[i].summary
+                    summary: callback[i].summary,
+                    summary_pics: callback[i].summary_pics,
+                    bkg_pics : callback[i].bkg_pics
+
                 });    
             }
         }
@@ -901,22 +956,55 @@ function setUser(id, book, perek, pasuk, ans) {
 };
 
 function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk, req, next) {
-    //addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk);
-    db.ref('qa/'+book+"/"+perek).child(pasuk).once('value', function (snapshot) {
+    addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk, req, next);
+    /*db.ref('qa/'+book+"/"+perek).child(pasuk).once('value', function (snapshot) {
         let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, id, next_pasuk, req);
         req.send_messages = jsonObj
         next();
         //return res.json(jsonObj);
     });
-    
+    */
 
  };
 
- function addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk) {
-    var client = restify.createJsonClient({
-        url: 'http://documentservice.cet.ac.il',
-        version: '*'
+ function addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk, req, next) {
+    db.ref('cet/books/' + book + '/perek/' + perek + '/questionnaire').once('value', function (snapshot) {
+        let item_id = snapshot.val();
+        if (item_id === null) {
+            db.ref('qa/'+book+"/"+perek).child(pasuk).once('value', function (snapshot) {
+                let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, id, next_pasuk, req);
+                req.send_messages = jsonObj
+                next();
+            });    
+        } else {
+            var client = restify.createJsonClient({
+                url: 'http://documentservice.cet.ac.il',
+                version: '*'
+            });
+
+            client.get('/api/DocumentVersions/' + item_id + '/he', function(err, request, response, obj) {
+                let documentVersions = JSON.parse(response.body);
+                let minorVersion = documentVersions.MinorVersion;
+                let majorVersion = documentVersions.MajorVersion;
+
+                client.get('/api/DocumentRevisions/' + item_id + '/he/' + majorVersion + '/' + minorVersion, function(err, request, response, obj) {
+                    let documentRevisions = JSON.parse(response.body);
+                    let a = parsedocumentRevisions(documentRevisions);
+                    //
+                    let b = "פסוק:"
+                    let snap = buildSnapFromCet(a.pasuk[b + pasuk].questions[0]);
+                    //
+                    let jsonObj = qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk, req);
+                    req.send_messages = jsonObj;
+                    next();
+                });
+            });
+        }
     });
+
+    
+
+    /*
 
     client.get('/api/DocumentVersions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he', function(err, request, response, obj) {
         let documentVersions = JSON.parse(response.body);
@@ -934,6 +1022,7 @@ function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk, req, next)
             return res.json(jsonObj);
         });
     });
+    */
  }
 
  function buildSnapFromCet(pasuk) {
@@ -994,7 +1083,7 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
     else {
         if (snap.koteret) {
             if (snap.ans) {
-                callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: snap.summary }, 1));
+                callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: snap.summary, summary_pics: snap.summary_pics }, 1));
 
                 callback.messages.push(buildMessage("בפסוקים הבאים נדבר על: " + snap.koteret));
                 callback.messages.push(buildMessage(book + " " + perek + " " + pasuk + ":" + speech));
@@ -1011,7 +1100,7 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
             callback.messages.push(buildMessage(speech));
             callback.messages.push(buildMessageQuickReplies(snap.title, [snap.q1, snap.q2, snap.q3]));
         } else {
-            callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: snap.summary }, 1));
+            callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: snap.summary, summary_pics: snap.summary_pics }, 1));
 
             callback.messages.push(buildMessage(speech));
             callback.messages.push(buildMessageQuickReplies(snap.title, [snap.q1, snap.q2, snap.q3]));
