@@ -25,6 +25,10 @@ var port =process.env.PORT || 5000;
 
 var io = require('socket.io').listen(app.listen(port));
 
+//app.configure(function () {
+//    app.use(express.bodyParser());
+//});
+
 app.use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
@@ -495,6 +499,7 @@ function saveUserData(req, res, next) {
 
 function sendMessages(req, res) {
     console.log(JSON.stringify(req.send_messages));
+    res.header("Content-Type", "application/json; charset=utf-8");
     return res.json(req.send_messages);
 }
 
