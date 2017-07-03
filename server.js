@@ -494,6 +494,7 @@ function saveUserData(req, res, next) {
 }
 
 function sendMessages(req, res) {
+    console.log(JSON.stringify(req.send_messages));
     return res.json(req.send_messages);
 }
 
