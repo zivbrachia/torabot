@@ -431,7 +431,7 @@ var ChatManagerService = (function () {
     function ChatManagerService(http) {
         this.http = http;
         //serverUrl = 'https://43401511.ngrok.io/' ;
-        this.serverUrl = 'http://torabot.herokuapp.com/';
+        this.serverUrl = 'https://torabot.herokuapp.com/';
     }
     ChatManagerService.prototype.sendText = function (dataObj) {
         var bodyMsg = {
