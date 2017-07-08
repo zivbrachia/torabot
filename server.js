@@ -36,6 +36,7 @@ app.use(function(req, res, next) {
 });
 
 app.use(express.static('public'));
+app.use(express.static('dist'));
 app.engine('html', require('ejs').renderFile);
 app.set('view engine', 'ejs');
 app.set('views', __dirname + '/src/views');
@@ -50,19 +51,19 @@ app.get('/wiki/:book/:perek', function (req, res) {
 
     let j = require('./Books/jonah');
     admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[0]);
-    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[1]);
-    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[2]);
-    admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[3]);
+    admin.database().ref('/Books/' + "יונה" + " " + 'ב').set(j.chapter[1]);
+    admin.database().ref('/Books/' + "יונה" + " " + 'ג').set(j.chapter[2]);
+    admin.database().ref('/Books/' + "יונה" + " " + 'ד').set(j.chapter[3]);
 });
 
 app.get('/', function (req, res) {
     res.render('apiweb', { title: "Hello" });
 });
-
+/*
 app.get('/chat', function (req, res) {
     let html = fs.readFileSync(__dirname + '/views/chat.html', 'utf8');
     res.end(html);
-});
+});*/
 
 app.get('/file', function (req, res) {
     res.writeHead(200, {'Content-Type': 'text/html'});
@@ -142,22 +143,30 @@ function endOfPerek(perek) {
 }
 
 function writeUserData(req, res, next) {
-    let sender_id = (req.body.originalRequest) && (req.body.originalRequest.data) && (req.body.originalRequest.data.sender) && (req.body.originalRequest.data.sender.id);
-    req.userData = jsonPersist.get(sender_id) || {};
-    //
     req.source = (req.body.originalRequest) && (req.body.originalRequest.source);
     if (req.source === undefined) {
          req.source = (req.body.result) && (req.body.result.source);
     }
+    if (req.body.originalRequest===undefined) {
+        req.sender_id = req.body.sessionId  // if it from the web
+        req.source = "sessionId"
+    }
+    else {
+        req.sender_id = (req.body.originalRequest) && (req.body.originalRequest.data) && (req.body.originalRequest.data.sender) && (req.body.originalRequest.data.sender.id);
+        req.source = (req.body.originalRequest) && (req.body.originalRequest.source);
+    }
+     
+    req.userData = jsonPersist.get(req.sender_id) || {};
+    
     next();
 }
 
 function buildMessages(req, res, next) {
     var b = "הביאור ל";
-    var p = " פסוק ";
+    var p  = " פסוק ";
     var p2 = " פרק ";
     var h = " הוא: ";
-    let speech_correct_answer = "אויי התשובה הנכונה היא:";
+    let speech_correct_answer = "אויי. התשובה הנכונה היא...";
     let summery = "אז מה היה לנו עד כה:";
     let there_you_go = "כל הכבוד! איזה מגניב";
     
@@ -174,7 +183,7 @@ function buildMessages(req, res, next) {
                     var pasuk = requestBody.result.parameters.pasuk || "א";
                     var book = requestBody.result.parameters.book;
                     var perek = requestBody.result.parameters.perek || "א";
-                    console.log('book: ' + book);
+                    //console.log('book: ' + book);
                     if ((book != "שמות") && (book != "במדבר") && (book != "דברים") && (book != "יונה")) {
                         let messages = [];
                         let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
@@ -184,6 +193,41 @@ function buildMessages(req, res, next) {
                     }
                     else {
                         speech = "קרתה תקלה, אפשר שוב? "
+                        ////
+                        let messages = [];
+                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + perek);
+                        ref.once("value", function (snapshot) {
+                            let psukim = snapshot.val();
+                            if (psukim===null) {
+                                let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
+                                messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
+                                req.send_messages = {messages: messages}
+                                next();
+                            }
+                            else {
+                                let psukim_arr = Object.keys(psukim);
+                                req.userData.book = requestBody.result.parameters.book;
+                                req.userData.perek = perek;
+                                req.userData.pasuk = pasuk;
+                                speech = psukim[pasuk];
+                                req.userData.last_pasuk = gematria("string", (psukim_arr.length));
+                                let next_pasuk = nextpasuk(pasuk);
+                                if (psukim[next_pasuk]===undefined) {
+                                    let messages = endOfPerek(perek);
+                                    req.send_messages = {messages: messages}
+                                    next(); 
+                                }
+                                else {
+                                    //var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
+                                    addQuestion(res, pasuk, perek, requestBody.result.parameters.book, speech, next_pasuk, req, next, req.userData.last_pasuk); 
+                                }
+                            }
+                        }, function (errorObject) {
+                                console.log(errorObject);
+                        });
+                        
+                        ////
+                        /*
                         var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + perek + "/" + pasuk);
                         ref.once("value", function (snapshot) {
                             req.userData.book = requestBody.result.parameters.book;
@@ -198,8 +242,9 @@ function buildMessages(req, res, next) {
                                     next(); 
                                 }
                                 else {
+                                    let last_pasuk = 'כ';
                                     var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
-                                    addQuestion(res, pasuk, perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk, req, next); 
+                                    addQuestion(res, pasuk, perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk, req, next, last_pasuk);
                                 }
                             }, function (errorObject) {
                                 console.log(errorObject);
@@ -207,26 +252,10 @@ function buildMessages(req, res, next) {
                         }, function (errorObject) {
                             console.log(errorObject);
                         });
+                        */
                     }
                 } else if (requestBody.result.action == "bye") {
-                    return res.json({
-                        speech: speech + "++",
-                        displayText: speech + "--",
-                        data: {
-                            facebook: {
-
-                                attachment: {
-                                    type: "image",
-                                    payload: {
-                                        url: "http://www.seobook.com/images/smallfish.jpg"
-                                    }
-                                },
-
-
-                            }
-                        },
-                    });
-                } //http://sparks.simania.co.il/bibleSearch.php?query
+                }
                 else if (requestBody.result.action == "findName") {
                     name = "נטע"
                     request("http://sparks.simania.co.il/bibleSearch.php?query=" + name, function (error, response, body) {
@@ -256,7 +285,9 @@ function buildMessages(req, res, next) {
                 else if (requestBody.result.action == "next") {
                     var senderId =  ((requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id)) || null;
                     if (senderId === null) {
-                        req.send_messages = {};
+                        let messages = [];
+                        messages.push(messages.push(buildMessage("תרשמו לי באופן מלא לדוגמא: 'שמות יז פסוק א'")));
+                        req.send_messages = {messages: messages}
                         next();
                     }
                     var pasuk = nextpasuk(req.userData.pasuk);
@@ -267,11 +298,11 @@ function buildMessages(req, res, next) {
                             let messages = [];
                             messages.push(buildMessage("הפרק הסתיים"));
                             messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר", "יונה"]));
-                            req.send_messages = {messages: messages}
+                            req.send_messages = {messages: messages};
                             next();
                         }
                         speech = m + snapshot1.val();
-                        addQuestion(res, pasuk, req.userData.perek, req.userData.book, speech, senderId, snapshot1.val(), req, next);
+                        addQuestion(res, pasuk, req.userData.perek, req.userData.book, speech, snapshot1.val(), req, next);
                     });
                     /*
                     var ref = db.ref('/users/' + senderId);
@@ -336,23 +367,14 @@ function buildMessages(req, res, next) {
                         next();
                     });
                     */
-                } else if (requestBody.result.action == "ques") {
+                } 
+                else if (requestBody.result.action == "ques") {
                     if (requestBody.result.parameters.wrongQ) {
                         var a = requestBody.result.fulfillment.speech;
                         let messages = [];
                         messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + req.userData.ans + ".", [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
                         req.send_messages = {messages: messages};
                         next();
-                        /*
-                        db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                            var exists = snapshot.val();
-                            var a = requestBody.result.fulfillment.speech;
-                            let messages = [];
-                            messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + exists.ans + ".", [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
-                            req.send_messages = {messages: messages};
-                            next();
-                        });
-                        */
                     } else {
                         var a = requestBody.result.fulfillment.speech;
                         if (req.userData.ans == requestBody.result.parameters.rightQ) {
@@ -389,14 +411,13 @@ function buildMessages(req, res, next) {
                         */
                     }
                 }
-
                 else if (requestBody.result.action == "q") {
                     /////////////////
                     //var num1 = get_pasuk_number(requestBody.result.contexts[0].parameters.number1);
                     var qContext = requestBody.result.contexts.find(find_context_q);
                     var pasukContext = requestBody.result.contexts.find(find_context_pasuk);
                     pasukContext.parameters.pasuk = get_pasuk_number(pasukContext.parameters.pasuk);
-                    //db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).on("value", function (snapshot_next) {
+                    //pasukContext.parameters.last_pasuk = req.userData.last_pasuk;
                     db.ref("Books/" + pasukContext.parameters.book + " " + pasukContext.parameters.perek + "/" + nextpasuk(pasukContext.parameters.pasuk)).once("value", function (snapshot_next) {
                         let next_pasuk = snapshot_next.val();
                         ///////
@@ -491,14 +512,12 @@ function buildMessages(req, res, next) {
 }
 
 function saveUserData(req, res, next) {
-    let sender_id = (req.body.originalRequest) && (req.body.originalRequest.data) && (req.body.originalRequest.data.sender) && (req.body.originalRequest.data.sender.id);
-    console.log("sender_id: " + sender_id);
-    jsonPersist.set(sender_id, req.userData);
+    jsonPersist.set(req.sender_id, req.userData);
     next();
 }
 
 function sendMessages(req, res) {
-    console.log(JSON.stringify(req.send_messages));
+    //console.log(JSON.stringify(req.send_messages));
     res.header("Content-Type", "application/json; charset=utf-8");
     return res.json(req.send_messages);
 }
@@ -523,326 +542,224 @@ app.post('/webhook', function (req, res) {
         "query": req.body.msg,
         //"timezone": "America/New_York",
         "lang": "en",
-        "sessionId": '222'
+        "sessionId": req.body.id || req.body.user || 'something'
     }
 
     client.post(options, body, function(err, req, resApi, obj) {
         //io.to(socket.id).emit('receive', {msg: JSON.stringify(obj.result.fulfillment.messages), user: 'שרה', img: '../img/unnamed.jpg'});
         //io.to(socket.id).emit('receive', {msg: obj.result.fulfillment.messages, user: 'שרה', img: '../img/unnamed.jpg'});
-        return res.json({
-            msg: obj.result.fulfillment.messages, 
-            //bg: 'https://s12.postimg.org/9weuz3svx/bkg_img.jpg'
-        });
+        let messages = mergeMessageType1(obj.result.fulfillment.messages);
+        messages[0].showIcon = true;    // for web
+        let percent = 0;
+        let result = {};
+        result.msg = messages;
+        //result.bg = 'https://s12.postimg.org/9weuz3svx/bkg_img.jpg';
+                
+        if (obj.result.action === "biur") {
+            var pasukContext = obj.result.contexts.find(find_context_pasuk);
+            if (pasukContext===undefined) {
+                return res.json(result);
+            }
+            result.bg = pasukContext.parameters.bkg || 'https://s12.postimg.org/9weuz3svx/bkg_img.jpg';
+            pasukContext.parameters.pasuk = get_pasuk_number(pasukContext.parameters.pasuk);
+            pasukContext.parameters.last_pasuk = pasukContext.parameters.last_pasuk || 0
+            let current = gematria("number", pasukContext.parameters.pasuk);
+            let size = gematria("number", pasukContext.parameters.last_pasuk);
+            result.status = {};
+            result.color = "color2" // "color1", "color2", "color3", "color4"
+            result.status.book = pasukContext.parameters.book;
+            result.status.perek = pasukContext.parameters.perek;
+            result.status.from = "א";
+            result.status.to = pasukContext.parameters.last_pasuk ;
+            result.status.current = pasukContext.parameters.pasuk;
+            console.log(current + "/" + size + "=" + (current / size));
+            result.status.percent = (current / size); // 0-1
+            return res.json(result);
+            /*
+            var pasukContext = obj.result.contexts.find(find_context_pasuk);
+            if (pasukContext===undefined) {
+                return res.json(result);
+            }
+            pasukContext.parameters.pasuk = get_pasuk_number(pasukContext.parameters.pasuk);
+            pasukContext.parameters.book;
+            pasukContext.parameters.perek;
+            let current = gematria("number", pasukContext.parameters.pasuk);
+            result.status = {};
+            db.ref("Books/" + pasukContext.parameters.book + " " + pasukContext.parameters.perek).once("value", function (snapshot) {
+                let psukim = snapshot.val();
+                let psukim_arr = Object.keys(psukim);
+                let size = psukim_arr.length;
+                result.color = '' // "color1", "color2", "color3", "color4"
+                result.status.from = psukim_arr[0];
+                result.status.to = psukim_arr[size-1];
+                result.status.current = pasukContext.parameters.pasuk;
+                result.status.percent = current / (size-1); // 0-1
+                return res.json(result);
+            }, function (errorObject) {
+                console.log(errorObject);
+            });
+            */
+        }
+        else {
+            return res.json(result);
+        }
     });
 });
 
-/*
-app.post('/hook', function (req, res) {
-    var b = "הביאור ל";
-    var p = " פסוק ";
-    var p2 = " פרק ";
-    var h = " הוא: ";
-    let speech_correct_answer = "אויי התשובה הנכונה היא:";
-    let summery = "אז מה היה לנו עד כה:";
-    let there_you_go = "כל הכבוד! איזה מגניב";
-    
-    var requestBody = req.body;
-    console.log('hook request: ' + requestBody.result.resolvedQuery);
-    try {
-        var speech = 'empty speech';
-
-        if (req.body) {
-
-            if (requestBody.result) {
-
-                if ((requestBody.result.action == "biur")) {
-                    var pasuk = requestBody.result.parameters.pasuk || "א";
-                    var book = requestBody.result.parameters.book;
-                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים")) {
-                        let messages = [];
-                        let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
-                        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר"]));
-                        return res.json({
-                            messages: messages
-                        });
-                    }
-                    else {
-                        speech = "קרתה תקלה, אפשר שוב? "
-
-                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + pasuk);
-                        ref.once("value", function (snapshot) {
-                            db.ref("Books/" + requestBody.result.parameters.book + " " + requestBody.result.parameters.perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
-                                let next_pasuk = snapshot_next.val();
-                                speech = snapshot.val();
-                                if (next_pasuk === null) {
-                                    let messages = endOfPerek(requestBody.result.parameters.perek);
-                                    return res.json({
-                                        messages: messages
-                                    }); 
-                                }
-                                else {
-                                    var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
-                                    addQuestion(res, pasuk, requestBody.result.parameters.perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk); 
-                                }
-                            }, function (errorObject) {
-                                console.log(errorObject);
-                            });
-                        }, function (errorObject) {
-                            console.log(errorObject);
-                        });
-                    }
-                } else if (requestBody.result.action == "bye") {
-                    return res.json({
-                        speech: speech + "++",
-                        displayText: speech + "--",
-                        data: {
-                            facebook: {
-
-                                attachment: {
-                                    type: "image",
-                                    payload: {
-                                        url: "http://www.seobook.com/images/smallfish.jpg"
-                                    }
-                                },
-
-
-                            }
-                        },
-                    });
-                } //http://sparks.simania.co.il/bibleSearch.php?query
-                else if (requestBody.result.action == "findName") {
-                    name = "נטע"
-                    request("http://sparks.simania.co.il/bibleSearch.php?query=" + name, function (error, response, body) {
-                        if (!error) {
-                            jsdom.env({
-                                html: body,
-                                scripts: [
-                                    'http://code.jquery.com/jquery-1.5.min.js'
-                                ]
-                                }, function (err, window) {
-                                    var $ = window.jQuery;
-                                    $("div > center > span > b:first").each(function () {
-                                        console.log($(this).text());
-                                    });
-                            });
-                            parseMyAwesomeHtml(body);
-                        } else {
-                            console.log(error);
-                        }
-                    });
-
-                }
-                else if (requestBody.result.action == "qa") {
-
-                    db.ref('qa/שמות א/א').child(userId).once('value', function (snapshot) {
-                        var exists = (snapshot.val() !== null);
-                        userExistsCallback(userId, exists);
-                    });
-
-                }
-                else if (requestBody.result.action == "unseen") {
-                }
-                else if (requestBody.result.action == "next") {
-                    var senderId =  ((requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id)) || null;
-                    if (senderId === null) return res.json({});
-                    var ref = db.ref('/users/' + senderId);
-                    //ref.on("value", function (snapshot) {
-                    ref.once("value", function (snapshot) {
-                        var exists = snapshot.val();
-                        var pasuk = nextpasuk(exists.pasuk);
-
-                        var m = exists.book + " פרק " + exists.perek + " פסוק " + pasuk + ": \n";
-
-                        var book = exists.book;
-                        var perek = exists.perek;
-
-                        var ref = db.ref("Books/" + exists.book + " " + perek + "/" + pasuk);
-
-                        //ref.on("value", function (snapshot1) {
-                        ref.once("value", function (snapshot1) {
-                            // console.log(snapshot.val());
-                            if (snapshot1.val() === null) {
-                                let messages = [];
-                                messages.push(buildMessage("הפרק הסתיים"));
-                                messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר"]));
-                                return res.json({
-                                    messages: messages
-                                });
-                            }
-                            speech = m + snapshot1.val();
-                            //(res, pasuk, perek, book, speech, id, next_pasuk)
-                            addQuestion(res,pasuk, perek, book, speech, senderId, snapshot1.val());
-                        });      
-                    });
-                }
-                else if (requestBody.result.action == "meaning") {
-                    db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                        //var exists = (snapshot.val() !== null);
-                        var exists = snapshot.val();
-                        let messages = [];
-                        messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]))
-                        return res.json({
-                            messages: messages
-                        });
-
-                    });
-
-                }
-                else if (requestBody.result.action == "correct") {
-                    // var next = "מושגים";
-                    db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                        //var exists = (snapshot.val() !== null);
-
-                        var exists = snapshot.val();
-                        var a = requestBody.result.fulfillment.speech;
-                        let messages = [];
-                        messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
-                        messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
-                        return res.json({
-                            messages: messages
-                        });
-                    });
-                } else if (requestBody.result.action == "ques") {
-                    if (requestBody.result.parameters.wrongQ) {
-
-                        db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                            var exists = snapshot.val();
-                            var a = requestBody.result.fulfillment.speech;
-                            let messages = [];
-                            messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + exists.ans + ".", [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
-                            return res.json({
-                                messages: messages
-                            });
-                        });
-                    } else {
-                        var a = requestBody.result.fulfillment.speech;
-                        db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                            //var exists = (snapshot.val() !== null);
-                            var exists = snapshot.val();
-                            if (exists.ans == requestBody.result.parameters.rightQ) {
-                                let messages = [];
-                                messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
-                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
-                                return res.json({
-                                    messages: messages
-                                }); 
-                            }
-                            else{
-                                let messages = [];
-                                messages.push(buildMessageQuickReplies(speech_correct_answer + " " + exists.ans + "."))
-                                return res.json({
-                                    messages: messages
-                                });
-                            }
-                        });
-                    }
-                }
-
-                else if (requestBody.result.action == "q") {
-                    /////////////////
-                    //var num1 = get_pasuk_number(requestBody.result.contexts[0].parameters.number1);
-                    var qContext = requestBody.result.contexts.find(find_context_q);
-                    var pasukContext = requestBody.result.contexts.find(find_context_pasuk);
-                    pasukContext.parameters.pasuk = get_pasuk_number(pasukContext.parameters.pasuk);
-                    //db.ref("Books/" + requestBody.result.contexts[1].parameters.book + " " + requestBody.result.contexts[1].parameters.number + "/" + nextpasuk(num1)).on("value", function (snapshot_next) {
-                    db.ref("Books/" + pasukContext.parameters.book + " " + pasukContext.parameters.perek + "/" + nextpasuk(pasukContext.parameters.pasuk)).once("value", function (snapshot_next) {
-                        let next_pasuk = snapshot_next.val();
-                        ///////
-                        let speech_next_pasuk = pasukContext.parameters.book + p2 + pasukContext.parameters.perek + p + nextpasuk(pasukContext.parameters.pasuk);
-                        if (next_pasuk === null) {
-                            speech_next_pasuk = 'הפרק הסתיים';
-                        }
-                        //without koteret of last pskuim
-                        if ((qContext.parameters.koteret == '')||(qContext.parameters.koteret == ' ')) {
-                            // correct answer
-                            if (qContext.parameters.ans == requestBody.result.resolvedQuery) {
-                                let messages = [];
-                                messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
-                                messages.push(buildMessageQuickReplies(there_you_go, [speech_next_pasuk]));
-                                return res.json({
-                                    messages: messages
-                                });
-                            }
-                            // wrong answer
-                            else {
-                                var messages = [];
-                                messages.push(buildMessageQuickReplies(speech_correct_answer + ' ' + qContext.parameters.ans + ".", [speech_next_pasuk]));
-                                return res.json({
-                                    messages: messages
-                                });
-                            }
-                        }
-                        //with sikum of last pskuim
-                        else if (qContext.parameters.ans == requestBody.result.resolvedQuery) {
-                            // correct answer
-                            let messages = [];
-                            messages.push(buildMessage(there_you_go));
-                            messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
-                            messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
-                            return res.json({
-                                messages: messages
-                            });
-                        } else {//witho sikum of last pskuim
-                            // wrong answer
-                            var messages = [];
-                            messages.push(buildMessage(speech_correct_answer + " " + qContext.parameters.ans + "."));
-                            messages.push(buildMessageImage("https://preview.ibb.co/g66kSa/image.jpg"));
-                            messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
-                            return res.json({
-                                messages: messages
-                            });
-                        }
-                        ///////
-                    }, function (errorObject) {
-                        console.log(errorObject);
-                    });
-                    /////////////////
-                }
-                else if (requestBody.result.action == "incorrect") {
-                //    var next = "מושגים";
-                    db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                        //var exists = (snapshot.val() !== null);
-                        var exists = snapshot.val();
-                            db.ref('/qa/' + exists.book + "/" + exists.perek + "/" + exists.pasuk).child("ans").once('value', function (snapshot) {
-                                var val = snapshot.val();
-                                var a = requestBody.result.fulfillment.speech;
-                                let messages = [];
-                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech + " התשובה הנכונה: " + val+"."), [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]);
-                        return res.json({
-                            messages: messages
-                        });
-                    });
-                    });
-
-                }
-                else if (requestBody.result.action == "math") {
-                    var result = eval(requestBody.result.parameters.a + requestBody.result.parameters.operator + requestBody.result.parameters.b);
-                    let messages = [];
-                    messages.push(buildMessage(requestBody.result.parameters.a + requestBody.result.parameters.operator + requestBody.result.parameters.b + " = " + result));
-                    return res.json({
-                        messages: messages
-                    });
-                }
-                else {
-                    var requestBody = req.body;
-                    return res.json(requestBody.result.fulfillment);
-                }
+function mergeMessageType1(messages) {
+    let new_messages = [];
+    let card_message = {};
+    messages.forEach(function(message) {
+        if (message.type!==1) {
+            if (card_message.type) {
+                new_messages.push(card_message);    
             }
+            card_message = {};
+            new_messages.push(message);
+        } else {
+            card_message.type = 1;
+            card_message.messages = card_message.messages || [];
+            card_message.messages.push(message);
         }
-    } catch (err) {
-        console.error("Can't process request", err);
-
-        return res.status(400).json({
-            status: {
-                code: 400,
-                errorType: err.message
-            }
-        });
+    });
+    if (card_message.type) {
+        new_messages.push(card_message);    
     }
-});
-*/
-console.log('Your application is running on http://localhost:' + port);
+    return new_messages;
+}
 
+function gematria(to, pasuk) {
+    let sum = 0;
+    if (to==="string") {
+        let digit = 0
+        let digitToLetter = {
+            "1" : "א",
+            "2" : "ב",
+            "3" : "ג",
+            "4" : "ד",
+            "5" : "ה",
+            "6" : "ו",
+            "7" : "ז",
+            "8" : "ח",
+            "9" : "ט",
+            "10" : "י",
+            "20" : "כ",
+            "30" : "ל",
+            "40" : "מ",
+            "50" : "נ",
+            "60" : "ס",
+            "70" : "ע",
+            "80" : "פ",
+            "90" : "צ",
+            "100" : "ק",
+            "200" : "ר",
+            "300" : "ש",
+            "400" : "ת"
+        };
+        sum = '';
+        if (pasuk >= 400) {
+            pasuk = pasuk - 400;
+            sum = sum + digitToLetter[400];
+        } 
+        if ((300 <= pasuk) && (pasuk < 400)) {
+            pasuk = pasuk - 300;
+            sum = sum + digitToLetter[300];
+        }if ((200 <= pasuk) && (pasuk < 300)) {
+            pasuk = pasuk - 200;
+            sum = sum + digitToLetter[200];
+        }if ((100 <= pasuk) && (pasuk < 200)) {
+            pasuk = pasuk - 100;
+            sum = sum + digitToLetter[100];
+        }if ((90 <= pasuk) && (pasuk < 100)) {
+            pasuk = pasuk - 90;
+            sum = sum + digitToLetter[90];
+        }if ((80 <= pasuk) && (pasuk < 90)) {
+            pasuk = pasuk - 80;
+            sum = sum + digitToLetter[80];
+        }if ((70 <= pasuk) && (pasuk < 80)) {
+            pasuk = pasuk - 70;
+            sum = sum + digitToLetter[70];
+        }if ((60 <= pasuk) && (pasuk < 70)) {
+            pasuk = pasuk - 60;
+            sum = sum + digitToLetter[60];
+        }if ((50 <= pasuk) && (pasuk < 60)) {
+            pasuk = pasuk - 50;
+            sum = sum + digitToLetter[50];
+        }if ((40 <= pasuk) && (pasuk < 50)) {
+            pasuk = pasuk - 40;
+            sum = sum + digitToLetter[40];
+        }if ((30 <= pasuk) && (pasuk < 40)) {
+            pasuk = pasuk - 30;
+            sum = sum + digitToLetter[30];
+        }if ((20 <= pasuk) && (pasuk < 30)) {
+            pasuk = pasuk - 20;
+            sum = sum + digitToLetter[20];
+        }if ((10 <= pasuk) && (pasuk < 20)) {
+            pasuk = pasuk - 10;
+            sum = sum + digitToLetter[10];
+        }if (9 === pasuk) {
+            pasuk = pasuk - 9;
+            sum = sum + digitToLetter[9];
+        }if (8 === pasuk) {
+            pasuk = pasuk - 8;
+            sum = sum + digitToLetter[8];
+        }if (7 === pasuk) {
+            pasuk = pasuk - 7;
+            sum = sum + digitToLetter[7];
+        }if (6 === pasuk) {
+            pasuk = pasuk - 6;
+            sum = sum + digitToLetter[6];
+        }if (5 === pasuk) {
+            pasuk = pasuk - 5;
+            sum = sum + digitToLetter[5];
+        }if (4 === pasuk) {
+            pasuk = pasuk - 4;
+            sum = sum + digitToLetter[4];
+        }if (3 === pasuk) {
+            pasuk = pasuk - 3;
+            sum = sum + digitToLetter[3];
+        }if (2 === pasuk) {
+            pasuk = pasuk - 2;
+            sum = sum + digitToLetter[2];
+        }if (1 === pasuk) {
+            pasuk = pasuk - 1;
+            sum = sum + digitToLetter[1];
+        }
+    } else if (to==="number") {
+        let letterToDigit = {
+            "א" : "1",
+            "ב" : "2",
+            "ג" : "3",
+            "ד" : "4",
+            "ה" : "5",
+            "ו" : "6",
+            "ז" : "7",
+            "ח" : "8",
+            "ט" : "9",
+            "י" : "10",
+            "כ" : "20",
+            "ל" : "30",
+            "מ" : "40",
+            "נ" : "50",
+            "ס" : "60",
+            "ע" : "70",
+            "פ" : "80",
+            "צ" : "90",
+            "ק" : "100",
+            "ר" : "200",
+            "ש" : "300",
+            "ת" : "400"
+        }
+        for(let i=0; i < pasuk.length; i++) {
+            sum = sum + parseInt(letterToDigit[pasuk.charAt(i)]);
+        } 
+    }
+    if (sum==="יה") sum = "טו";
+    if (sum==="יו") sum = "טז";
+    return sum;
+}
+
+console.log('Your application is running on http://localhost:' + port);
 function find_context_q(context) {
     return (context.name === "q");
 }
@@ -871,8 +788,25 @@ function read_question_excel(file_name) {
     convertExcel(file_name, 'excel_to_json/coll.json', false, function (err, callback) {
         var jsonfile = require('jsonfile')
         var file = 'data.json'
+        var a = {};
+        a.book = {};
         for (var i = 0; i < callback.length; i++) {
             if (callback[i].pasuk != "") {
+                let perek = gematria("number", callback[i].perek);
+                let pasuk = gematria("number", callback[i].pasuk);
+                a.book[callback[i].sefer] = a.book[callback[i].sefer] || {};
+                a.book[callback[i].sefer].perek = a.book[callback[i].sefer].perek || {};
+                a.book[callback[i].sefer].perek[perek] = a.book[callback[i].sefer].perek[perek] || {};
+                a.book[callback[i].sefer].perek[perek].pasuk = a.book[callback[i].sefer].perek[perek].pasuk || {};
+                a.book[callback[i].sefer].perek[perek].pasuk[pasuk] = a.book[callback[i].sefer].perek[perek].pasuk[pasuk] || {};
+                a.book[callback[i].sefer].perek[perek].pasuk[pasuk] = callback[i];
+            }
+        }
+        for (var i = 0; i < callback.length; i++) {
+            if (callback[i].pasuk != "") {
+                let perek = gematria("number", callback[i].perek);
+                let pasuk = gematria("number", callback[i].pasuk);
+                callback[i].bkg_pics = callback[i].bkg_pics || a.book[callback[i].sefer].perek[perek].pasuk[1].bkg_pics;
                 admin.database().ref('/qa/' + callback[i].sefer + '/' + callback[i].perek + '/' + callback[i].pasuk).set({
                     pasuk: callback[i].pasuk,
                     q1: callback[i].ans1,
@@ -962,24 +896,16 @@ function setUser(id, book, perek, pasuk, ans) {
     });
 };
 
-function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk, req, next) {
-    addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk, req, next);
-    /*db.ref('qa/'+book+"/"+perek).child(pasuk).once('value', function (snapshot) {
-        let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, id, next_pasuk, req);
-        req.send_messages = jsonObj
-        next();
-        //return res.json(jsonObj);
-    });
-    */
-
+function addQuestion(res, pasuk, perek, book, speech, next_pasuk, req, next, last_pasuk) {
+    addQuestionCet(res, pasuk, perek, book, speech, next_pasuk, req, next, last_pasuk);
  };
 
- function addQuestionCet(res, pasuk, perek, book, speech, id, next_pasuk, req, next) {
+ function addQuestionCet(res, pasuk, perek, book, speech, next_pasuk, req, next, last_pasuk) {
     db.ref('cet/books/' + book + '/perek/' + perek + '/questionnaire').once('value', function (snapshot) {
         let item_id = snapshot.val();
         if (item_id === null) {
             db.ref('qa/'+book+"/"+perek).child(pasuk).once('value', function (snapshot) {
-                let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, id, next_pasuk, req);
+                let jsonObj = qExistsCallback(pasuk, perek, book, snapshot.val(), speech, next_pasuk, req, last_pasuk);
                 req.send_messages = jsonObj
                 next();
             });    
@@ -999,41 +925,21 @@ function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk, req, next)
                     let a = parsedocumentRevisions(documentRevisions);
                     //
                     let b = "פסוק:"
-                    let snap = buildSnapFromCet(a.pasuk[b + pasuk].questions[0]);
-                    //
-                    let jsonObj = qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk, req);
+                    let ques = (a.pasuk[b + pasuk]) && (a.pasuk[b + pasuk].questions[0]) || null;
+                    let snap = buildSnapFromCet(ques);
+                                
+                    let jsonObj = qExistsCallback(pasuk, perek, book, snap, speech, next_pasuk, req, last_pasuk);
                     req.send_messages = jsonObj;
                     next();
                 });
             });
         }
     });
-
-    
-
-    /*
-
-    client.get('/api/DocumentVersions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he', function(err, request, response, obj) {
-        let documentVersions = JSON.parse(response.body);
-        let minorVersion = documentVersions.MinorVersion;
-        let majorVersion = documentVersions.MajorVersion;
-
-        client.get('/api/DocumentRevisions/3a02b5a3-3c94-419a-8806-8bcd7b17882e/he/' + majorVersion + '/' + minorVersion, function(err, request, response, obj) {
-            let documentRevisions = JSON.parse(response.body);
-            let a = parsedocumentRevisions(documentRevisions);
-            //
-            let b = "פסוק:"
-            let snap = buildSnapFromCet(a.pasuk[b + pasuk].questions[0]);
-            //
-            let jsonObj = qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk);
-            return res.json(jsonObj);
-        });
-    });
-    */
  }
 
  function buildSnapFromCet(pasuk) {
     let snap = {};
+    if (pasuk===null) return null;
     snap.title = cleanHtmlTags(pasuk.title);
     snap.koteret = cleanHtmlTags(pasuk.koteret);
     snap.summary = cleanHtmlTags(pasuk.summary);
@@ -1051,14 +957,13 @@ function addQuestion(res, pasuk, perek, book, speech, id, next_pasuk, req, next)
      return string.replace(/<\/?([a-z][a-z0-9]*)\b[^>]*>/gi, '');
  }
 
- function qExistsCallback(pasuk, perek, book, snap, speech, id, next_pasuk, req) {
-    let jsonObj = buildCallback(pasuk, perek, book, snap, speech, next_pasuk);
+ function qExistsCallback(pasuk, perek, book, snap, speech, next_pasuk, req, last_pasuk) {
+    let jsonObj = buildCallback(pasuk, perek, book, snap, speech, next_pasuk, last_pasuk);
     req.userData.ans = (snap && snap.ans) || '';
-    //setUser(id, book, perek, pasuk, (snap && snap.ans) || '');
     return jsonObj;
 };
 
-function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
+function buildCallback(pasuk, perek, book, snap, speech, next_pasuk, last_pasuk) {
     var next = "";
     var b = "הביאור ל";
     var p = " פסוק ";
@@ -1078,8 +983,8 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
     if (next_pasuk === null) {
         speech_next_pasuk = 'הפרק הסתיים';
     }
-
-    callback.contextOut.push(buildContextOutElement('pasuk', { book: book, perek: perek, pasuk: pasuk }, 1));
+    let bkg_pics = snap && snap.bkg_pics || '';
+    callback.contextOut.push(buildContextOutElement('pasuk', { book: book, perek: perek, pasuk: pasuk, last_pasuk: last_pasuk, bkg: bkg_pics}, 1));
 
     if (snap === null) {
         if (book === undefined) {
@@ -1102,12 +1007,12 @@ function buildCallback(pasuk, perek, book, snap, speech, next_pasuk) {
             }
         }
         else if (!(snap.summary)) {
-            callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: '' }, 1));
+            callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: ''}, 1));
 
             callback.messages.push(buildMessage(speech));
             callback.messages.push(buildMessageQuickReplies(snap.title, [snap.q1, snap.q2, snap.q3]));
         } else {
-            callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: snap.summary, summary_pics: snap.summary_pics }, 1));
+            callback.contextOut.push(buildContextOutElement('q', { ans: snap.ans, koteret: snap.summary, summary_pics: snap.summary_pics}, 1));
 
             callback.messages.push(buildMessage(speech));
             callback.messages.push(buildMessageQuickReplies(snap.title, [snap.q1, snap.q2, snap.q3]));
