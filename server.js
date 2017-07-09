@@ -212,13 +212,13 @@ function buildMessages(req, res, next) {
                                 speech = psukim[pasuk];
                                 req.userData.last_pasuk = gematria("string", (psukim_arr.length));
                                 let next_pasuk = nextpasuk(pasuk);
-                                if (psukim[next_pasuk]===undefined) {
+                                if ((psukim[pasuk]===undefined) && (psukim[next_pasuk]===undefined)) {
                                     let messages = endOfPerek(perek);
                                     req.send_messages = {messages: messages}
                                     next(); 
                                 }
                                 else {
-                                    //var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
+                                      //var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
                                     addQuestion(res, pasuk, perek, requestBody.result.parameters.book, speech, next_pasuk, req, next, req.userData.last_pasuk); 
                                 }
                             }
