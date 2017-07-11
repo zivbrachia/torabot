@@ -546,9 +546,7 @@ app.post('/webhook', function (req, res) {
     }
 
     client.post(options, body, function(err, req, resApi, obj) {
-        //io.to(socket.id).emit('receive', {msg: JSON.stringify(obj.result.fulfillment.messages), user: 'שרה', img: '../img/unnamed.jpg'});
-        //io.to(socket.id).emit('receive', {msg: obj.result.fulfillment.messages, user: 'שרה', img: '../img/unnamed.jpg'});
-        let messages = mergeMessageType1(obj.result.fulfillment.messages);
+        let messages = mergeMessageType1(obj.result.fulfillment || obj.result.fulfillment.messages);
         messages[0].showIcon = true;    // for web
         let percent = 0;
         let result = {};
