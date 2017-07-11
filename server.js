@@ -546,7 +546,7 @@ app.post('/webhook', function (req, res) {
     }
 
     client.post(options, body, function(err, req, resApi, obj) {
-        if (obj.status!==200) {
+        if (obj.status.code!==200) {
             return res.json(obj.status);
         }
         let messages = mergeMessageType1(obj.result.fulfillment.messages);
