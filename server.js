@@ -546,7 +546,10 @@ app.post('/webhook', function (req, res) {
     }
 
     client.post(options, body, function(err, req, resApi, obj) {
-        let messages = mergeMessageType1(obj.result.fulfillment || obj.result.fulfillment.messages);
+        if (obj.status!==200) {
+            return res.json(obj.status);
+        }
+        let messages = mergeMessageType1(obj.result.fulfillment.messages);
         messages[0].showIcon = true;    // for web
         let percent = 0;
         let result = {};
