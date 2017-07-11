@@ -537,7 +537,7 @@ app.post('/webhook', function (req, res) {
             'content-type': 'application/json; charset=utf-8'
         }
     }
-
+    console.log(JSON.stringify(req.body));
     var body = {
         "query": req.body.msg,
         //"timezone": "America/New_York",
@@ -547,7 +547,8 @@ app.post('/webhook', function (req, res) {
 
     client.post(options, body, function(err, req, resApi, obj) {
         if (obj.status.code!==200) {
-            return res.json(obj.status);
+            console.log(JSON.stringify(obj.status));
+            return res.status(500).json(obj.status);
         }
         let messages = mergeMessageType1(obj.result.fulfillment.messages);
         messages[0].showIcon = true;    // for web
