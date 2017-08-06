@@ -131,14 +131,15 @@ function parsedocumentRevisions(documentRevisions) {
     return a;
 }
 
-function endOfPerek(perek) {
+function endOfPerek(book, perek) {
     let messages = [];
-    let title = "מגניב! סיימנו את פרק " + perek +", לאן ממשיכים עכשיו?";
-    if (perek==="לד") {
+    let title = "מגניב! סיימנו את " + book + " פרק " + perek +", לאן ממשיכים עכשיו?";
+    /*if (perek==="לד") {
         messages.push(buildMessageQuickReplies(title, ["סקר"]));    
     } else {
         messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
-    }
+    }*/
+    messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
     return messages;
 }
 
@@ -166,9 +167,9 @@ function buildMessages(req, res, next) {
     var p  = " פסוק ";
     var p2 = " פרק ";
     var h = " הוא: ";
-    let speech_correct_answer = "אויי. התשובה הנכונה היא...";
+    let speech_correct_answer = "❌ אויי. התשובה הנכונה היא...";
     let summery = "אז מה היה לנו עד כה:";
-    let there_you_go = "כל הכבוד! איזה מגניב";
+    let there_you_go = "✅ כל הכבוד! איזה מגניב";
     
     var requestBody = req.body;
     console.log('hook request: ' + requestBody.result.resolvedQuery);
@@ -213,7 +214,7 @@ function buildMessages(req, res, next) {
                                 req.userData.last_pasuk = gematria("string", (psukim_arr.length));
                                 let next_pasuk = nextpasuk(pasuk);
                                 if ((psukim[pasuk]===undefined) && (psukim[next_pasuk]===undefined)) {
-                                    let messages = endOfPerek(perek);
+                                    let messages = endOfPerek(req.userData.book, perek);
                                     req.send_messages = {messages: messages}
                                     next(); 
                                 }
@@ -255,6 +256,10 @@ function buildMessages(req, res, next) {
                         */
                     }
                 } else if (requestBody.result.action == "bye") {
+                } else if (requestBody.result.action == "end_of_chapter") {
+                    let messages = endOfPerek(req.userData.book, req.userData.perek);
+                    req.send_messages = { messages: messages }
+                    next(); 
                 }
                 else if (requestBody.result.action == "findName") {
                     name = "נטע"
@@ -389,26 +394,6 @@ function buildMessages(req, res, next) {
                             req.send_messages = {messages: messages};
                             next();
                         }
-                        /*
-
-                        db.ref('/users/').child(requestBody.originalRequest.data.sender.id).once('value', function (snapshot) {
-                            //var exists = (snapshot.val() !== null);
-                            var exists = snapshot.val();
-                            if (exists.ans == requestBody.result.parameters.rightQ) {
-                                let messages = [];
-                                messages.push(buildMessageImage(gifs[math.floor(math.random() * gifs.length)]));
-                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech, [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]));
-                                req.send_messages = {messages: messages};
-                                next(); 
-                            }
-                            else{
-                                let messages = [];
-                                messages.push(buildMessageQuickReplies(speech_correct_answer + " " + exists.ans + "."))
-                                req.send_messages = {messages: messages};
-                                next();
-                            }
-                        });
-                        */
                     }
                 }
                 else if (requestBody.result.action == "q") {
@@ -456,7 +441,9 @@ function buildMessages(req, res, next) {
                         } else {//witho sikum of last pskuim
                             // wrong answer
                             var messages = [];
-                            messages.push(buildMessage(speech_correct_answer + " " + qContext.parameters.ans + "."));
+                            //messages.push(buildMessage(speech_correct_answer + " " + qContext.parameters.ans + "."));
+                            messages.push(buildMessage(speech_correct_answer));
+                            messages.push(buildMessage(qContext.parameters.ans));
                             let summary_pic = qContext.parameters.summary_pics || "https://preview.ibb.co/g66kSa/image.jpg";
                             messages.push(buildMessageImage(summary_pic));
                             messages.push(buildMessageQuickReplies(summery + " " + qContext.parameters.koteret, [speech_next_pasuk]));
