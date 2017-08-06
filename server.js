@@ -226,34 +226,6 @@ function buildMessages(req, res, next) {
                         }, function (errorObject) {
                                 console.log(errorObject);
                         });
-                        
-                        ////
-                        /*
-                        var ref = db.ref("Books/" + requestBody.result.parameters.book + " " + perek + "/" + pasuk);
-                        ref.once("value", function (snapshot) {
-                            req.userData.book = requestBody.result.parameters.book;
-                            req.userData.perek = perek;//requestBody.result.parameters.perek;
-                            req.userData.pasuk = pasuk;
-                            db.ref("Books/" + requestBody.result.parameters.book + " " + perek + "/" + nextpasuk(pasuk)).once("value", function (snapshot_next) {
-                                let next_pasuk = snapshot_next.val();
-                                speech = snapshot.val();
-                                if (next_pasuk === null) {
-                                    let messages = endOfPerek(perek);
-                                    req.send_messages = {messages: messages}
-                                    next(); 
-                                }
-                                else {
-                                    let last_pasuk = 'כ';
-                                    var sender_id = (requestBody.originalRequest) && (requestBody.originalRequest.data) && (requestBody.originalRequest.data.sender) && (requestBody.originalRequest.data.sender.id);
-                                    addQuestion(res, pasuk, perek, requestBody.result.parameters.book, speech, sender_id, next_pasuk, req, next, last_pasuk);
-                                }
-                            }, function (errorObject) {
-                                console.log(errorObject);
-                            });
-                        }, function (errorObject) {
-                            console.log(errorObject);
-                        });
-                        */
                     }
                 } else if (requestBody.result.action == "bye") {
                 } else if (requestBody.result.action == "end_of_chapter") {
@@ -377,7 +349,9 @@ function buildMessages(req, res, next) {
                     if (requestBody.result.parameters.wrongQ) {
                         var a = requestBody.result.fulfillment.speech;
                         let messages = [];
-                        messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + req.userData.ans + ".", [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
+                        //messages.push(buildMessageQuickReplies(a + " התשובה הנכונה: " + req.userData.ans + ".", [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
+                        messages.push(buildMessage("❌ " + a + " התשובה הנכונה: "));
+                        messages.push(buildMessageQuickReplies(req.userData.ans, [req.userData.book + p2 + req.userData.perek + p + nextpasuk(req.userData.pasuk)]));
                         req.send_messages = {messages: messages};
                         next();
                     } else {
@@ -465,7 +439,9 @@ function buildMessages(req, res, next) {
                                 var val = snapshot.val();
                                 var a = requestBody.result.fulfillment.speech;
                                 let messages = [];
-                                messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech + " התשובה הנכונה: " + val+"."), [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]);
+                                //messages.push(buildMessageQuickReplies(requestBody.result.fulfillment.speech + " התשובה הנכונה: " + val+"."), [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]);
+                                messages.push(buildMessage("❌ " + requestBody.result.fulfillment.speech + " התשובה הנכונה: "));
+                                messages.push(buildMessageQuickReplies(val), [exists.book + p2 + exists.perek + p + nextpasuk(exists.pasuk)]);
                                 req.send_messages = {messages: messages};
                                 next();
                             });
