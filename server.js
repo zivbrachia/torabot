@@ -47,13 +47,14 @@ require('./socket_event')(io, restify);
 
 ////// GET ////////
 app.get('/wiki/:book/:perek', function (req, res) {
-    //res.render('wikiGet', { title: req.params.book + " " + req.params.perek });
+    res.render('wikiGet', { title: req.params.book + " " + req.params.perek });
 
-    let j = require('./Books/jonah');
+    /*let j = require('./Books/jonah');
     admin.database().ref('/Books/' + "יונה" + " " + 'א').set(j.chapter[0]);
     admin.database().ref('/Books/' + "יונה" + " " + 'ב').set(j.chapter[1]);
     admin.database().ref('/Books/' + "יונה" + " " + 'ג').set(j.chapter[2]);
     admin.database().ref('/Books/' + "יונה" + " " + 'ד').set(j.chapter[3]);
+    */
 });
 
 app.get('/', function (req, res) {
