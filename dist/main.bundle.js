@@ -603,6 +603,12 @@ var LoginComponent = (function () {
     function LoginComponent(userService, router) {
         this.userService = userService;
         this.router = router;
+        // user: any;
+        this.user = {
+            name: '',
+            pic: '',
+            id: ''
+        };
         this.pic = ['user_fish', 'user_yael', 'user_owl', 'user_bunny', 'user_lizzard'];
     }
     LoginComponent.prototype.ngOnInit = function () {
