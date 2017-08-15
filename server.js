@@ -23,6 +23,8 @@ var db = admin.database();
 
 var port =process.env.PORT || 5000;
 
+var general_books = ["אסתר", "דברים", "שמות", "במדבר", "יונה", "מלכים א", "מלכים ב", "רות", "תהלים"];
+
 var io = require('socket.io').listen(app.listen(port));
 
 //app.configure(function () {
@@ -140,7 +142,7 @@ function endOfPerek(book, perek) {
     } else {
         messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
     }*/
-    messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
+    messages.push(buildMessageQuickReplies(title, general_books));
     return messages;
 }
 
@@ -186,10 +188,11 @@ function buildMessages(req, res, next) {
                     var book = requestBody.result.parameters.book;
                     var perek = requestBody.result.parameters.perek || "א";
                     //console.log('book: ' + book);
-                    if ((book != "שמות") && (book != "במדבר") && (book != "דברים") && (book != "יונה")) {
+                    if (general_books.includes(book)===false) {
+                    //if ((book != "שמות") && (book != "במדבר") && (book != "דברים") && (book != "יונה")) {
                         let messages = [];
                         let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
-                        messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
+                        messages.push(buildMessageQuickReplies(title, general_books));
                         req.send_messages = {messages: messages}
                         next();
                     }
@@ -202,7 +205,7 @@ function buildMessages(req, res, next) {
                             let psukim = snapshot.val();
                             if (psukim===null) {
                                 let title = "אני בשלבי פיתוח, עדיין לא ניתן לגשת לכל מקום בתנ״ך.";
-                                messages.push(buildMessageQuickReplies(title, ["דברים", "שמות", "במדבר", "יונה"]));
+                                messages.push(buildMessageQuickReplies(title, general_books));
                                 req.send_messages = {messages: messages}
                                 next();
                             }
@@ -293,7 +296,7 @@ function buildMessages(req, res, next) {
                         if (snapshot1.val() === null) {
                             let messages = [];
                             messages.push(buildMessage("הפרק הסתיים"));
-                            messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", ["דברים", "שמות", "במדבר", "יונה"]));
+                            messages.push(buildMessageQuickReplies("לאן ממשיכים עכשיו?", general_books));
                             req.send_messages = {messages: messages};
                             next();
                         }
